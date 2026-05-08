@@ -142,6 +142,10 @@ export function parseSvg(text: string): { doc: Document; slots: SvgSlot[]; slotI
 
 export function applyColors(text: string, colors: Record<string, string>): string {
   if (!colors || Object.keys(colors).length === 0) return text
+  console.log("[DIAG-4] applyColors entered", {
+    textPreview: text.slice(0, 80),
+    colors,
+  })
   const doc = new DOMParser().parseFromString(text, "image/svg+xml")
   const classMap = readClassFillMap(doc)
   const overrideRules: string[] = []
@@ -207,6 +211,7 @@ export function applyColors(text: string, colors: Record<string, string>): strin
     svg.appendChild(styleEl)
   }
 
+  console.log("[DIAG-4] applyColors finished", { applied, overrideRulesCount: overrideRules.length })
   return new XMLSerializer().serializeToString(doc)
 }
 
@@ -261,6 +266,13 @@ export function useAssetSrc(url: string | null, colors: Record<string, string> |
     if (!url) return null
     if (!isSvg) return url
     if (!text) return null
+    console.log("[DIAG-3] useAssetSrc applying colors", {
+      url: url?.split("/").pop(),
+      hasText: !!text,
+      textLength: text?.length ?? 0,
+      colorsKeys: Object.keys(colors ?? {}),
+      colorsSample: colors,
+    })
     const patched = applyColors(text, colors ?? {})
     return svgToDataUrl(patched)
   // eslint-disable-next-line react-hooks/exhaustive-deps
