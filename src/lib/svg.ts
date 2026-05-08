@@ -241,19 +241,30 @@ function normalizeColor(c: string): string {
 export function useAssetSrc(url: string | null, colors: Record<string, string> | null | undefined): string | null {
   const isSvg = isSvgPath(url)
   const [text, setText] = useState<string | null>(null)
+
   useEffect(() => {
     let cancelled = false
     if (!url || !isSvg) { setText(null); return }
     fetchSvgText(url).then((t) => { if (!cancelled) setText(t) }).catch(() => { if (!cancelled) setText(null) })
     return () => { cancelled = true }
   }, [url, isSvg])
+
+  // Stabilize colors by value rather than reference so the parent
+  // can pass `someArray.find(...)?.colors` without thrashing the memo.
+  const colorsKey = useMemo(() => {
+    if (!colors) return ""
+    const keys = Object.keys(colors).sort()
+    return keys.map((k) => `${k}:${colors[k]}`).join("|")
+  }, [colors])
+
   return useMemo(() => {
     if (!url) return null
     if (!isSvg) return url
     if (!text) return null
     const patched = applyColors(text, colors ?? {})
     return svgToDataUrl(patched)
-  }, [url, isSvg, text, colors])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, isSvg, text, colorsKey])
 }
 
 export function useSvgAsset(url: string | null, colors: Record<string, string> | null) {
