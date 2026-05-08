@@ -1,3 +1,4 @@
+import * as React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, Layers, LogOut, Move, Pencil, Plus, Power, RotateCcw, Trash2, Upload as UploadIcon, X } from "lucide-react"
 import { Link } from "react-router-dom"
@@ -45,6 +46,37 @@ import {
 } from "@/lib/supabase"
 import { fetchSvgText, isSvgPath, parseSvg, useAssetSrc } from "@/lib/svg"
 import { Star } from "lucide-react"
+
+class AdminErrorBoundary extends React.Component<
+  { children: React.ReactNode; viewName: string },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("[AdminErrorBoundary]", this.props.viewName, error, info)
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <main className="mx-auto max-w-[800px] px-8 py-10">
+          <h2 className="font-serif text-2xl italic mb-4">Something broke in {this.props.viewName}</h2>
+          <pre className="whitespace-pre-wrap break-words border border-destructive/50 bg-destructive/10 p-4 text-xs font-mono text-destructive">
+            {this.state.error.message}
+            {"\n\n"}
+            {this.state.error.stack}
+          </pre>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Reload the page after fixing. This error has also been logged to the browser console.
+          </p>
+        </main>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const CANVAS = 1000
 
@@ -818,14 +850,18 @@ export default function AdminPage() {
       </header>
 
       {view === "layers" ? (
-        <LayersView layerOrder={layerOrder} assets={assets} defaults={defaults} onChanged={load} />
+        <AdminErrorBoundary viewName="Layers">
+          <LayersView layerOrder={layerOrder} assets={assets} defaults={defaults} onChanged={load} />
+        </AdminErrorBoundary>
       ) : view === "positioning" ? (
-        <PositioningView
-          assets={assets}
-          defaults={defaults}
-          layerOrder={layerOrder}
-          onChanged={load}
-        />
+        <AdminErrorBoundary viewName="Positioning">
+          <PositioningView
+            assets={assets}
+            defaults={defaults}
+            layerOrder={layerOrder}
+            onChanged={load}
+          />
+        </AdminErrorBoundary>
       ) : (
       <main className="mx-auto max-w-[1400px] px-8 py-10">
         {loading ? (
@@ -995,7 +1031,11 @@ function LayersView({
           <div className="border border-border">
             {reversed.map((row, idx) => {
               const realIndex = draft.length - 1 - idx
-              const list = assetsByCategory[row.category]
+              const list = assetsByCategory[row.category] ?? []
+              if (!LAYER_LABELS[row.category]) {
+                console.warn("[LayersView] unknown category in layer_order:", row.category)
+                return null
+              }
               const selectedId = selection[row.category]
               return (
                 <div
@@ -1081,7 +1121,8 @@ function LayersView({
             {draft.map((row) => {
               const id = selection[row.category]
               if (!id) return null
-              const asset = assetsByCategory[row.category].find((a) => a.id === id)
+              const list = assetsByCategory[row.category] ?? []
+              const asset = list.find((a) => a.id === id)
               if (!asset) return null
               const blend = (row.blend_mode && row.blend_mode !== "normal" ? row.blend_mode : undefined) as GlobalCompositeOperation | undefined
               if (row.category === "body") {

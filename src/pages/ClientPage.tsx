@@ -105,13 +105,11 @@ export default function ClientPage() {
   useEffect(() => {
     Promise.all([fetchAssets({ onlyActive: true }), fetchCategoryDefaults(), fetchLayerOrder(), fetchHeadExpressionDefaults(), fetchBodyDefaultOutfits(), fetchHeadExpressionColors()])
       .then(([rows, defs, order, hexpr, defOutfits, hcolors]) => {
-        console.log("[DIAG-0] all fetches resolved")
         setAssets(rows)
         setDefaults(defs)
         setLayerOrder(order)
         setHeadExprDefaults(hexpr)
         setHeadExprColors(hcolors)
-        console.log("[DIAG-1] fetched headExprColors:", { count: hcolors.length, sample: hcolors.slice(0, 3) })
         setDefaultOutfits(defOutfits)
         rows.forEach((r) => {
           const img = new Image()
@@ -137,7 +135,8 @@ export default function ClientPage() {
         }
       })
       .catch((err) => {
-        console.error("[DIAG-0] one of the fetches FAILED, state may be incomplete:", err)
+        console.error("ClientPage data fetch failed:", err)
+        toast.error("Failed to load assets")
       })
       .finally(() => setLoading(false))
   }, [])
@@ -419,18 +418,6 @@ export default function ClientPage() {
                   )}
                   {hair && <OverlayLayer asset={hair} bodyId={body.id} defaults={defaults} z={layerOrder.find((l) => l.category === "hair")?.z_index ?? 2} />}
                   {accessory && <OverlayLayer asset={accessory} bodyId={body.id} defaults={defaults} z={layerOrder.find((l) => l.category === "accessory")?.z_index ?? 3} />}
-                  {expression && (() => {
-                    const found = hair ? headExprColors.find((c) => c.head_id === hair.id && c.expression_id === expression.id) : null
-                    console.log("[DIAG-2] expression render", {
-                      hairId: hair?.id ?? null,
-                      expressionId: expression.id,
-                      headExprColorsLength: headExprColors.length,
-                      headExprColorsAllRows: headExprColors,
-                      foundRow: found ?? "NOT FOUND",
-                      colorsToPass: found?.colors ?? null,
-                    })
-                    return null
-                  })()}
                   {expression && (
                     <OverlayLayer
                       asset={expression}
