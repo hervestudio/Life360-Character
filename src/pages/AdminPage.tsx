@@ -975,7 +975,7 @@ function LayersView({
     }
     for (const a of assets) {
       if (!a.is_active) continue
-      if (a.category === "facial_hair" || a.category === "skin") continue
+      if (!(a.category in map)) continue
       map[a.category as LayerOrder["category"]].push(a)
     }
     return map
