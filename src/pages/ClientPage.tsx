@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AgeGroup, Asset, BodyDefaultOutfit, CategoryDefault, Gender, HeadExpressionColor, HeadExpressionDefault, LayerOrder, SkinTone, Transform } from "@/lib/supabase"
 import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, publicUrl, resolveExpressionTransform, resolveTransform } from "@/lib/supabase"
-import { applyColors, fetchSvgText, isSvgPath, svgToDataUrl, useAssetSrc } from "@/lib/svg"
+import { applyColors, ensureSvgDimensions, fetchSvgText, isSvgPath, svgToDataUrl, useAssetSrc } from "@/lib/svg"
 
 const CANVAS = 1000
 
@@ -254,14 +254,18 @@ export default function ClientPage() {
       if (!l.asset) continue
       try {
         let layerSrc = publicUrl(l.asset.storage_path)
-        if (l.asset.category === "expression" && isSvgPath(l.asset.storage_path)) {
-          const override = hair ? headExprColors.find((c) => c.head_id === hair.id && c.expression_id === l.asset!.id)?.colors : null
-          if (override && Object.keys(override).length > 0) {
-            try {
-              const text = await fetchSvgText(layerSrc)
-              layerSrc = svgToDataUrl(applyColors(text, override))
-            } catch {}
-          }
+        if (isSvgPath(l.asset.storage_path)) {
+          try {
+            let text = await fetchSvgText(layerSrc)
+            if (l.asset.category === "expression") {
+              const override = hair ? headExprColors.find((c) => c.head_id === hair.id && c.expression_id === l.asset!.id)?.colors : null
+              if (override && Object.keys(override).length > 0) {
+                text = applyColors(text, override)
+              }
+            }
+            text = ensureSvgDimensions(text)
+            layerSrc = svgToDataUrl(text)
+          } catch {}
         }
         const img = l.asset.id === body?.id && bodyImg ? bodyImg : await load(layerSrc)
         ctx.globalCompositeOperation = (l.blend && l.blend !== "normal" ? l.blend : "source-over") as GlobalCompositeOperation
