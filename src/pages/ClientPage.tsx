@@ -278,8 +278,11 @@ export default function ClientPage() {
           const t = l.asset.category === "expression"
             ? resolveExpressionTransform(l.asset, hair?.id ?? null, body?.id ?? null, defaults, headExprDefaults)
             : resolveTransform(l.asset, body?.id ?? null, defaults)
-          const w = img.naturalWidth * t.scale * scaleFactor
-          const h = img.naturalHeight * t.scale * scaleFactor
+          const isSvg = isSvgPath(l.asset.storage_path)
+          const baseW = isSvg ? CANVAS : img.naturalWidth
+          const baseH = isSvg ? CANVAS : img.naturalHeight
+          const w = baseW * t.scale * scaleFactor
+          const h = baseH * t.scale * scaleFactor
           const x = (size - w) / 2 + t.offset_x * scaleFactor
           const y = (size - h) / 2 + t.offset_y * scaleFactor
           ctx.drawImage(img, x, y, w, h)
