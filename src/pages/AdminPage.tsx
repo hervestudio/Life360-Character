@@ -1280,7 +1280,10 @@ function PositioningView({
   )
   useEffect(() => {
     if (category !== "expression") return
-    if (!compatibleHeads.length) { setHeadId(null); return }
+    if (!compatibleHeads.length) {
+      if (headId !== null) setHeadId(null)
+      return
+    }
     if (!headId || !compatibleHeads.find((h) => h.id === headId)) {
       setHeadId(compatibleHeads[0].id)
     }
@@ -1301,10 +1304,13 @@ function PositioningView({
   )
 
   useEffect(() => {
-    if (categoryAssets.length && !categoryAssets.find((a) => a.id === previewAssetId)) {
+    if (!categoryAssets.length) {
+      if (previewAssetId !== null) setPreviewAssetId(null)
+      return
+    }
+    if (!categoryAssets.find((a) => a.id === previewAssetId)) {
       setPreviewAssetId(categoryAssets[0].id)
     }
-    if (!categoryAssets.length) setPreviewAssetId(null)
   }, [categoryAssets, previewAssetId])
 
   const existingDefault = defaults.find((d) => d.body_id === bodyId && d.category === category)
