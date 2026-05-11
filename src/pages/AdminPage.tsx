@@ -664,6 +664,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<"library" | "positioning" | "layers">(navState?.view ?? "library")
   const [positioningInit] = useState(navState?.positioning)
+  const [positioningSel, setPositioningSel] = useState<PositioningSelection | null>(null)
   const [layerOrder, setLayerOrder] = useState<LayerOrder[]>(DEFAULT_LAYER_ORDER)
   const [defaultOutfits, setDefaultOutfits] = useState<BodyDefaultOutfit[]>([])
 
@@ -761,7 +762,16 @@ export default function AdminPage() {
           <div className="flex items-center gap-3">
             <span className="hidden text-xs text-muted-foreground sm:inline">{email}</span>
             <Button asChild variant="ghost" className="rounded-none uppercase text-xs tracking-[0.2em]">
-              <Link to="/"><ArrowLeft className="mr-1 h-3 w-3" /> Back to builder</Link>
+              <Link
+                to="/"
+                state={
+                  view === "positioning" && positioningSel
+                    ? { builder: positioningSel }
+                    : undefined
+                }
+              >
+                <ArrowLeft className="mr-1 h-3 w-3" /> Back to builder
+              </Link>
             </Button>
             <Button onClick={() => setUploadOpen(true)} className="rounded-none uppercase text-xs tracking-[0.2em]">
               <Plus className="mr-1 h-3 w-3" /> Upload
@@ -874,6 +884,7 @@ export default function AdminPage() {
             layerOrder={layerOrder}
             onChanged={load}
             initial={positioningInit}
+            onSelectionChange={setPositioningSel}
           />
         </AdminErrorBoundary>
       ) : (
@@ -1225,12 +1236,22 @@ const POS_CATEGORIES: { key: Exclude<AssetCategory, "body" | "skin" | "facial_ha
   { key: "expression", label: "Expression" },
 ]
 
+export type PositioningSelection = {
+  age: AgeGroup
+  gender: Gender
+  skin: SkinTone
+  category: Exclude<AssetCategory, "body" | "skin" | "facial_hair">
+  assetId: string | null
+  headId: string | null
+}
+
 function PositioningView({
   assets,
   defaults,
   layerOrder,
   onChanged,
   initial,
+  onSelectionChange,
 }: {
   assets: Asset[]
   defaults: CategoryDefault[]
@@ -1244,6 +1265,7 @@ function PositioningView({
     assetId?: string
     headId?: string
   }
+  onSelectionChange?: (sel: PositioningSelection) => void
 }) {
   const zOf = (cat: LayerOrder["category"]) => layerOrder.find((l) => l.category === cat)?.z_index ?? 0
   const bodyZ = zOf("body")
@@ -1271,6 +1293,17 @@ function PositioningView({
     try { setHeadExprColors(await fetchHeadExpressionColors()) } catch {}
   }
   useEffect(() => { loadHeadExpr() }, [])
+
+  useEffect(() => {
+    onSelectionChange?.({
+      age: filterAge,
+      gender: filterGender,
+      skin: filterSkin,
+      category,
+      assetId: previewAssetId,
+      headId,
+    })
+  }, [filterAge, filterGender, filterSkin, category, previewAssetId, headId, onSelectionChange])
 
   const body = bodies.find((b) => b.id === bodyId) ?? null
 

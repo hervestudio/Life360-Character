@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, Download, Lock, Pencil, Shuffle } from "lucide-react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -85,6 +85,17 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 export default function ClientPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const builderInit = (location.state ?? null) as null | {
+    builder?: {
+      age: AgeGroup
+      gender: Gender
+      skin: SkinTone
+      category: "hair" | "outfit" | "accessory" | "expression"
+      assetId: string | null
+      headId: string | null
+    }
+  }
   const [isAdmin, setIsAdmin] = useState(false)
   const [assets, setAssets] = useState<Asset[]>([])
   const [defaults, setDefaults] = useState<CategoryDefault[]>([])
@@ -133,23 +144,38 @@ export default function ClientPage() {
           const img = new Image()
           img.src = publicUrl(r.storage_path)
         })
-        const bodies = rows.filter((a) => a.category === "body")
-        const seed = bodies[Math.floor(Math.random() * bodies.length)]
-        if (seed && seed.age && seed.gender && seed.skin_tone) {
-          const heads = rows.filter((a) => a.category === "hair" && a.skin_tone === seed.skin_tone && a.age === seed.age && a.gender === seed.gender)
-          const accs = rows.filter((a) => a.category === "accessory")
-          const def = defOutfits.find((d) => d.body_id === seed.id)
-          const outfits = rows.filter((a) => a.category === "outfit" && a.parent_body_id === seed.id)
-          const initialOutfit = def && outfits.find((o) => o.id === def.outfit_id) ? def.outfit_id : null
+        const b = builderInit?.builder
+        if (b) {
+          setTab(b.category)
+          const outfits = rows.filter((a) => a.category === "outfit")
           setSel({
-            age: seed.age,
-            gender: seed.gender,
-            skin_tone: seed.skin_tone,
-            hair_id: heads.length ? heads[Math.floor(Math.random() * heads.length)].id : null,
-            accessory_id: accs.length ? accs[Math.floor(Math.random() * accs.length)].id : null,
-            expression_id: null,
-            outfit_id: initialOutfit,
+            age: b.age,
+            gender: b.gender,
+            skin_tone: b.skin,
+            hair_id: b.headId ?? (b.category === "hair" ? b.assetId : null),
+            accessory_id: b.category === "accessory" ? b.assetId : null,
+            expression_id: b.category === "expression" ? b.assetId : null,
+            outfit_id: b.category === "outfit" ? (outfits.find((o) => o.id === b.assetId)?.id ?? null) : null,
           })
+        } else {
+          const bodies = rows.filter((a) => a.category === "body")
+          const seed = bodies[Math.floor(Math.random() * bodies.length)]
+          if (seed && seed.age && seed.gender && seed.skin_tone) {
+            const heads = rows.filter((a) => a.category === "hair" && a.skin_tone === seed.skin_tone && a.age === seed.age && a.gender === seed.gender)
+            const accs = rows.filter((a) => a.category === "accessory")
+            const def = defOutfits.find((d) => d.body_id === seed.id)
+            const outfits = rows.filter((a) => a.category === "outfit" && a.parent_body_id === seed.id)
+            const initialOutfit = def && outfits.find((o) => o.id === def.outfit_id) ? def.outfit_id : null
+            setSel({
+              age: seed.age,
+              gender: seed.gender,
+              skin_tone: seed.skin_tone,
+              hair_id: heads.length ? heads[Math.floor(Math.random() * heads.length)].id : null,
+              accessory_id: accs.length ? accs[Math.floor(Math.random() * accs.length)].id : null,
+              expression_id: null,
+              outfit_id: initialOutfit,
+            })
+          }
         }
       })
       .catch((err) => {
