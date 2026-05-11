@@ -232,20 +232,12 @@ export function svgToDataUrl(text: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(text)}`
 }
 
-export function ensureSvgDimensions(text: string): string {
+export function setSvgDimensions(text: string, width: number, height: number): string {
   const doc = new DOMParser().parseFromString(text, "image/svg+xml")
   const svg = doc.documentElement
   if (!svg || svg.nodeName.toLowerCase() !== "svg") return text
-  const hasW = svg.hasAttribute("width")
-  const hasH = svg.hasAttribute("height")
-  if (hasW && hasH) return text
-  const viewBox = svg.getAttribute("viewBox")
-  if (!viewBox) return text
-  const parts = viewBox.trim().split(/[\s,]+/).map(Number)
-  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return text
-  const [, , vbW, vbH] = parts
-  if (!hasW) svg.setAttribute("width", String(vbW))
-  if (!hasH) svg.setAttribute("height", String(vbH))
+  svg.setAttribute("width", String(width))
+  svg.setAttribute("height", String(height))
   return new XMLSerializer().serializeToString(doc)
 }
 

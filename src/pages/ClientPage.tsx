@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AgeGroup, Asset, BodyDefaultOutfit, CategoryDefault, Gender, HeadExpressionColor, HeadExpressionDefault, LayerOrder, SkinTone, Transform } from "@/lib/supabase"
 import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, publicUrl, resolveExpressionTransform, resolveTransform } from "@/lib/supabase"
-import { applyColors, ensureSvgDimensions, fetchSvgText, isSvgPath, svgToDataUrl, useAssetSrc } from "@/lib/svg"
+import { applyColors, fetchSvgText, isSvgPath, setSvgDimensions, svgToDataUrl, useAssetSrc } from "@/lib/svg"
 
 const CANVAS = 1000
 
@@ -263,7 +263,7 @@ export default function ClientPage() {
                 text = applyColors(text, override)
               }
             }
-            text = ensureSvgDimensions(text)
+            text = setSvgDimensions(text, size, size)
             layerSrc = svgToDataUrl(text)
           } catch {}
         }
@@ -279,10 +279,10 @@ export default function ClientPage() {
             ? resolveExpressionTransform(l.asset, hair?.id ?? null, body?.id ?? null, defaults, headExprDefaults)
             : resolveTransform(l.asset, body?.id ?? null, defaults)
           const isSvg = isSvgPath(l.asset.storage_path)
-          const baseW = isSvg ? CANVAS : img.naturalWidth
-          const baseH = isSvg ? CANVAS : img.naturalHeight
-          const w = baseW * t.scale * scaleFactor
-          const h = baseH * t.scale * scaleFactor
+          const baseW = isSvg ? size : img.naturalWidth
+          const baseH = isSvg ? size : img.naturalHeight
+          const w = isSvg ? baseW * t.scale : baseW * t.scale * scaleFactor
+          const h = isSvg ? baseH * t.scale : baseH * t.scale * scaleFactor
           const x = (size - w) / 2 + t.offset_x * scaleFactor
           const y = (size - h) / 2 + t.offset_y * scaleFactor
           ctx.drawImage(img, x, y, w, h)
