@@ -95,7 +95,7 @@ export default function ClientPage() {
   const [sel, setSel] = useState<Selection>({
     age: "adult",
     gender: "female",
-    skin_tone: "caucasian",
+    skin_tone: "light",
     hair_id: null,
     accessory_id: null,
     expression_id: null,

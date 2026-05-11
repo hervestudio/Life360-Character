@@ -9,7 +9,7 @@ export const supabase = createClient(url, anonKey, {
 
 export type AgeGroup = "kid" | "teen" | "adult" | "senior"
 export type Gender = "male" | "female"
-export type SkinTone = "caucasian" | "hispanic" | "black"
+export type SkinTone = "light" | "medium" | "dark"
 export type AssetCategory = "body" | "skin" | "hair" | "facial_hair" | "accessory" | "expression" | "outfit"
 
 export type BlendMode =
@@ -50,9 +50,9 @@ export const BLEND_MODES: BlendMode[] = [
 ]
 
 export const SKIN_TONES: { key: SkinTone; label: string; swatch: string }[] = [
-  { key: "caucasian", label: "Caucasian", swatch: "#f1c9a5" },
-  { key: "hispanic", label: "Hispanic", swatch: "#c68863" },
-  { key: "black", label: "Black", swatch: "#6b3f2a" },
+  { key: "light", label: "Light", swatch: "#f1c9a5" },
+  { key: "medium", label: "Medium", swatch: "#c68863" },
+  { key: "dark", label: "Dark", swatch: "#6b3f2a" },
 ]
 
 export interface Asset {

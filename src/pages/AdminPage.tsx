@@ -225,7 +225,7 @@ function UploadDialog({
   const [label, setLabel] = useState("")
   const [age, setAge] = useState<AgeGroup>("adult")
   const [gender, setGender] = useState<Gender>("male")
-  const [skinTone, setSkinTone] = useState<SkinTone>("caucasian")
+  const [skinTone, setSkinTone] = useState<SkinTone>("light")
   const [parentBodyId, setParentBodyId] = useState<string>("")
   const [files, setFiles] = useState<File[]>([])
   const [progress, setProgress] = useState(0)
@@ -462,7 +462,7 @@ function EditAssetDialog({
   const [label, setLabel] = useState("")
   const [age, setAge] = useState<AgeGroup>("adult")
   const [gender, setGender] = useState<Gender>("male")
-  const [skinTone, setSkinTone] = useState<SkinTone>("caucasian")
+  const [skinTone, setSkinTone] = useState<SkinTone>("light")
   const [parentBodyId, setParentBodyId] = useState<string>("")
   const [busy, setBusy] = useState(false)
   const [replaceFile, setReplaceFile] = useState<File | null>(null)
@@ -1229,7 +1229,7 @@ function PositioningView({
   const heads = useMemo(() => assets.filter((a) => a.category === "hair"), [assets])
   const [filterAge, setFilterAge] = useState<AgeGroup>("adult")
   const [filterGender, setFilterGender] = useState<Gender>("female")
-  const [filterSkin, setFilterSkin] = useState<SkinTone>("caucasian")
+  const [filterSkin, setFilterSkin] = useState<SkinTone>("light")
   const bodyId = useMemo(() => {
     const match = bodies.find(
       (b) => b.age === filterAge && b.gender === filterGender && b.skin_tone === filterSkin,
