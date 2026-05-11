@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, Download, Lock, Shuffle } from "lucide-react"
-import { Link } from "react-router-dom"
+import { ChevronLeft, ChevronRight, Download, Lock, Pencil, Shuffle } from "lucide-react"
+import { Link, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AgeGroup, Asset, BodyDefaultOutfit, CategoryDefault, Gender, HeadExpressionColor, HeadExpressionDefault, LayerOrder, SkinTone, Transform } from "@/lib/supabase"
-import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, publicUrl, resolveExpressionTransform, resolveTransform } from "@/lib/supabase"
+import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, isCurrentUserAdmin, publicUrl, resolveExpressionTransform, resolveTransform, supabase } from "@/lib/supabase"
 import { applyColors, fetchSvgText, isSvgPath, setSvgDimensions, svgToDataUrl, useAssetSrc } from "@/lib/svg"
 
 const CANVAS = 1000
@@ -84,6 +84,8 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 export default function ClientPage() {
+  const navigate = useNavigate()
+  const [isAdmin, setIsAdmin] = useState(false)
   const [assets, setAssets] = useState<Asset[]>([])
   const [defaults, setDefaults] = useState<CategoryDefault[]>([])
   const [layerOrder, setLayerOrder] = useState<LayerOrder[]>(DEFAULT_LAYER_ORDER)
@@ -101,6 +103,22 @@ export default function ClientPage() {
     expression_id: null,
     outfit_id: null,
   })
+
+  useEffect(() => {
+    let alive = true
+    const check = async () => {
+      const { data } = await supabase.auth.getUser()
+      if (!alive) return
+      if (!data.user) { setIsAdmin(false); return }
+      try {
+        const admin = await isCurrentUserAdmin()
+        if (alive) setIsAdmin(admin)
+      } catch { if (alive) setIsAdmin(false) }
+    }
+    check()
+    const { data: sub } = supabase.auth.onAuthStateChange(() => { check() })
+    return () => { alive = false; sub.subscription.unsubscribe() }
+  }, [])
 
   useEffect(() => {
     Promise.all([fetchAssets({ onlyActive: true }), fetchCategoryDefaults(), fetchLayerOrder(), fetchHeadExpressionDefaults(), fetchBodyDefaultOutfits(), fetchHeadExpressionColors()])
@@ -422,6 +440,33 @@ export default function ClientPage() {
               >
                 <Download className="h-4 w-4" /> Export PNG
               </button>
+              {isAdmin && (
+                <button
+                  onClick={() => {
+                    const currentAssetId =
+                      tab === "hair" ? sel.hair_id
+                      : tab === "outfit" ? sel.outfit_id
+                      : tab === "accessory" ? sel.accessory_id
+                      : sel.expression_id
+                    navigate("/admin", {
+                      state: {
+                        view: "positioning",
+                        positioning: {
+                          age: sel.age,
+                          gender: sel.gender,
+                          skin: sel.skin_tone,
+                          category: tab,
+                          assetId: currentAssetId ?? undefined,
+                          headId: sel.hair_id ?? undefined,
+                        },
+                      },
+                    })
+                  }}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-white/[0.03] px-5 py-3.5 text-sm font-medium transition hover:bg-white/[0.06]"
+                >
+                  <Pencil className="h-4 w-4" /> Edit current
+                </button>
+              )}
             </div>
           </aside>
 

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, Layers, LogOut, Move, Pencil, Plus, Power, RotateCcw, Trash2, Upload as UploadIcon, X } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -640,6 +640,18 @@ function EditAssetDialog({
 }
 
 export default function AdminPage() {
+  const location = useLocation()
+  const navState = (location.state ?? null) as null | {
+    view?: "library" | "positioning" | "layers"
+    positioning?: {
+      age?: AgeGroup
+      gender?: Gender
+      skin?: SkinTone
+      category?: Exclude<AssetCategory, "body" | "skin" | "facial_hair">
+      assetId?: string
+      headId?: string
+    }
+  }
   const [authed, setAuthed] = useState<null | boolean>(null)
   const [email, setEmail] = useState<string>("")
   const [assets, setAssets] = useState<Asset[]>([])
@@ -650,7 +662,8 @@ export default function AdminPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [editAsset, setEditAsset] = useState<Asset | null>(null)
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<"library" | "positioning" | "layers">("library")
+  const [view, setView] = useState<"library" | "positioning" | "layers">(navState?.view ?? "library")
+  const [positioningInit] = useState(navState?.positioning)
   const [layerOrder, setLayerOrder] = useState<LayerOrder[]>(DEFAULT_LAYER_ORDER)
   const [defaultOutfits, setDefaultOutfits] = useState<BodyDefaultOutfit[]>([])
 
@@ -860,6 +873,7 @@ export default function AdminPage() {
             defaults={defaults}
             layerOrder={layerOrder}
             onChanged={load}
+            initial={positioningInit}
           />
         </AdminErrorBoundary>
       ) : (
@@ -1216,29 +1230,38 @@ function PositioningView({
   defaults,
   layerOrder,
   onChanged,
+  initial,
 }: {
   assets: Asset[]
   defaults: CategoryDefault[]
   layerOrder: LayerOrder[]
   onChanged: () => Promise<void> | void
+  initial?: {
+    age?: AgeGroup
+    gender?: Gender
+    skin?: SkinTone
+    category?: Exclude<AssetCategory, "body" | "skin" | "facial_hair">
+    assetId?: string
+    headId?: string
+  }
 }) {
   const zOf = (cat: LayerOrder["category"]) => layerOrder.find((l) => l.category === cat)?.z_index ?? 0
   const bodyZ = zOf("body")
   const activeZ = zOf
   const bodies = useMemo(() => assets.filter((a) => a.category === "body"), [assets])
   const heads = useMemo(() => assets.filter((a) => a.category === "hair"), [assets])
-  const [filterAge, setFilterAge] = useState<AgeGroup>("adult")
-  const [filterGender, setFilterGender] = useState<Gender>("female")
-  const [filterSkin, setFilterSkin] = useState<SkinTone>("light")
+  const [filterAge, setFilterAge] = useState<AgeGroup>(initial?.age ?? "adult")
+  const [filterGender, setFilterGender] = useState<Gender>(initial?.gender ?? "female")
+  const [filterSkin, setFilterSkin] = useState<SkinTone>(initial?.skin ?? "light")
   const bodyId = useMemo(() => {
     const match = bodies.find(
       (b) => b.age === filterAge && b.gender === filterGender && b.skin_tone === filterSkin,
     )
     return match?.id ?? bodies[0]?.id ?? null
   }, [bodies, filterAge, filterGender, filterSkin])
-  const [headId, setHeadId] = useState<string | null>(null)
-  const [category, setCategory] = useState<Exclude<AssetCategory, "body" | "skin" | "facial_hair">>("hair")
-  const [previewAssetId, setPreviewAssetId] = useState<string | null>(null)
+  const [headId, setHeadId] = useState<string | null>(initial?.headId ?? null)
+  const [category, setCategory] = useState<Exclude<AssetCategory, "body" | "skin" | "facial_hair">>(initial?.category ?? "hair")
+  const [previewAssetId, setPreviewAssetId] = useState<string | null>(initial?.assetId ?? null)
   const [headExprDefaults, setHeadExprDefaults] = useState<HeadExpressionDefault[]>([])
   const [headExprColors, setHeadExprColors] = useState<HeadExpressionColor[]>([])
   const [editingColorAssetId, setEditingColorAssetId] = useState<string | null>(null)
