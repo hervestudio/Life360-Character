@@ -289,12 +289,29 @@ export default function ClientPage() {
         }
       } catch {}
     }
+    const slug = (v: string | null | undefined) =>
+      (v ?? "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+    const parts = [
+      sel.age,
+      sel.gender,
+      sel.skin_tone,
+      hair?.label ?? "no-hair",
+      outfit?.label ?? "default-outfit",
+      accessory?.label ?? "no-accessory",
+      expression?.label ?? "no-expression",
+    ]
+      .map(slug)
+      .filter(Boolean)
+    const filename = parts.length ? `character-${parts.join("_")}.png` : "character.png"
     canvas.toBlob((blob) => {
       if (!blob) return
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = "character.png"
+      a.download = filename
       a.click()
       URL.revokeObjectURL(url)
     }, "image/png")
