@@ -1280,6 +1280,7 @@ function PositioningView({
   )
   useEffect(() => {
     if (category !== "expression") return
+    if (!assets.length) return
     if (!compatibleHeads.length) {
       if (headId !== null) setHeadId(null)
       return
@@ -1287,7 +1288,7 @@ function PositioningView({
     if (!headId || !compatibleHeads.find((h) => h.id === headId)) {
       setHeadId(compatibleHeads[0].id)
     }
-  }, [category, compatibleHeads, headId])
+  }, [assets.length, category, compatibleHeads, headId])
   const head = compatibleHeads.find((h) => h.id === headId) ?? null
   const headSize = useNaturalSize(head ? publicUrl(head.storage_path) : "")
   const headExprOverride = headExprDefaults.find((h) => h.head_id === headId) ?? null
@@ -1304,6 +1305,7 @@ function PositioningView({
   )
 
   useEffect(() => {
+    if (!assets.length) return
     if (!categoryAssets.length) {
       if (previewAssetId !== null) setPreviewAssetId(null)
       return
@@ -1311,7 +1313,7 @@ function PositioningView({
     if (!categoryAssets.find((a) => a.id === previewAssetId)) {
       setPreviewAssetId(categoryAssets[0].id)
     }
-  }, [categoryAssets, previewAssetId])
+  }, [assets.length, categoryAssets, previewAssetId])
 
   const existingDefault = defaults.find((d) => d.body_id === bodyId && d.category === category)
   const [draft, setDraft] = useState<Transform>({ offset_x: 0, offset_y: 0, scale: 1 })
