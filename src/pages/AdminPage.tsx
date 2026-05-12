@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, Layers, LogOut, Move, Pencil, Plus, Power, RotateCcw, Trash2, Upload as UploadIcon, X } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Layers, LogOut, Move, Pencil, Plus, Power, RotateCcw, Trash2, Upload as UploadIcon, X } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -659,6 +659,9 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<AssetCategory | "all">("all")
   const [genderFilter, setGenderFilter] = useState<Gender | "all">("all")
   const [skinFilter, setSkinFilter] = useState<SkinTone | "all">("all")
+  const [ageFilter, setAgeFilter] = useState<AgeGroup | "all">("all")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [editAsset, setEditAsset] = useState<Asset | null>(null)
   const [loading, setLoading] = useState(true)
@@ -711,8 +714,59 @@ export default function AdminPage() {
       if (a.category !== "body" && a.category !== "hair") return false
       if (a.skin_tone !== skinFilter) return false
     }
+    if (ageFilter !== "all") {
+      if (a.category !== "body" && a.category !== "hair") return false
+      if (a.age !== ageFilter) return false
+    }
     return true
   })
+
+  const filteredIds = filtered.map((a) => a.id)
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id))
+  const someFilteredSelected = filteredIds.some((id) => selectedIds.has(id))
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  function toggleSelectAll() {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of filteredIds) next.delete(id)
+        return next
+      })
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of filteredIds) next.add(id)
+        return next
+      })
+    }
+  }
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+  async function bulkDelete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Delete ${selectedIds.size} asset${selectedIds.size > 1 ? "s" : ""}? This cannot be undone.`)) return
+    setBulkDeleting(true)
+    try {
+      const targets = assets.filter((a) => selectedIds.has(a.id))
+      await Promise.all(targets.map((a) => deleteAsset(a)))
+      toast.success(`Deleted ${targets.length} asset${targets.length > 1 ? "s" : ""}.`)
+      setSelectedIds(new Set())
+      await load()
+    } catch (err: any) {
+      toast.error(err.message ?? "Bulk delete failed.")
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   if (authed === null) {
     return <div className="flex min-h-svh items-center justify-center bg-background text-xs uppercase tracking-[0.3em] text-muted-foreground">Loading</div>
@@ -800,6 +854,21 @@ export default function AdminPage() {
           </div>
             {view === "library" && (
               <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Age</span>
+                <div className="flex items-center gap-1">
+                  {(["all", ...AGES] as const).map((a) => {
+                    const active = ageFilter === a
+                    return (
+                      <button
+                        key={a}
+                        onClick={() => setAgeFilter(a)}
+                        className={`border px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] transition ${active ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"}`}
+                      >
+                        {a}
+                      </button>
+                    )
+                  })}
+                </div>
                 <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Gender</span>
                 <div className="flex items-center gap-1">
                   {(["all", ...GENDERS] as const).map((g) => {
@@ -838,9 +907,9 @@ export default function AdminPage() {
                     )
                   })}
                 </div>
-                {(genderFilter !== "all" || skinFilter !== "all") && (
+                {(genderFilter !== "all" || skinFilter !== "all" || ageFilter !== "all") && (
                   <button
-                    onClick={() => { setGenderFilter("all"); setSkinFilter("all") }}
+                    onClick={() => { setGenderFilter("all"); setSkinFilter("all"); setAgeFilter("all") }}
                     className="border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:border-foreground hover:text-foreground"
                   >
                     Clear
@@ -889,6 +958,40 @@ export default function AdminPage() {
         </AdminErrorBoundary>
       ) : (
       <main className="mx-auto max-w-[1400px] px-8 py-10">
+        {!loading && filtered.length > 0 && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border border-border bg-muted/30 px-4 py-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleSelectAll}
+                className={`flex h-5 w-5 items-center justify-center border transition ${allFilteredSelected ? "border-foreground bg-foreground text-background" : someFilteredSelected ? "border-foreground bg-foreground/20 text-foreground" : "border-border text-transparent hover:border-foreground"}`}
+                title={allFilteredSelected ? "Deselect all" : "Select all"}
+                aria-label={allFilteredSelected ? "Deselect all" : "Select all"}
+              >
+                <Check className="h-3 w-3" />
+              </button>
+              <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${filtered.length} shown`}
+              </span>
+            </div>
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={clearSelection}
+                  className="border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:border-foreground hover:text-foreground"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={bulkDelete}
+                  disabled={bulkDeleting}
+                  className="inline-flex items-center gap-1 border border-destructive bg-destructive px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-background disabled:opacity-50"
+                >
+                  <Trash2 className="h-3 w-3" /> {bulkDeleting ? "Deleting..." : `Delete ${selectedIds.size}`}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {loading ? (
           <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Loading assets</p>
         ) : filtered.length === 0 ? (
@@ -904,12 +1007,21 @@ export default function AdminPage() {
               const isOutfit = a.category === "outfit"
               const parentBody = isOutfit && a.parent_body_id ? assets.find((x) => x.id === a.parent_body_id) : null
               const isDefaultOutfit = isOutfit && a.parent_body_id ? defaultOutfits.some((d) => d.body_id === a.parent_body_id && d.outfit_id === a.id) : false
+              const isSelected = selectedIds.has(a.id)
               return (
               <div key={a.id} className={`group space-y-2 ${a.is_active ? "" : "opacity-50"}`}>
                 <div className="relative">
                   <Checker>
                     <img src={publicUrl(a.storage_path)} alt={a.label} className="absolute inset-0 h-full w-full object-contain" />
                   </Checker>
+                  <button
+                    onClick={() => toggleSelect(a.id)}
+                    title={isSelected ? "Deselect" : "Select"}
+                    aria-label={isSelected ? "Deselect" : "Select"}
+                    className={`absolute left-2 bottom-2 z-10 flex h-6 w-6 items-center justify-center border transition ${isSelected ? "border-foreground bg-foreground text-background opacity-100" : "border-border bg-background text-transparent opacity-0 group-hover:opacity-100 hover:border-foreground"}`}
+                  >
+                    <Check className="h-3 w-3" />
+                  </button>
                   <div className="absolute right-2 top-2 flex flex-col gap-1 opacity-0 transition group-hover:opacity-100">
                     {isOutfit && a.parent_body_id && (
                       <button onClick={() => onToggleDefaultOutfit(a)} title={isDefaultOutfit ? "Unset default" : "Set as default"} className={`flex h-8 w-8 items-center justify-center border bg-background ${isDefaultOutfit ? "border-foreground text-foreground" : "border-border text-foreground hover:bg-foreground hover:text-background"}`}>
