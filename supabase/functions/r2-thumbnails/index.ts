@@ -1,7 +1,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { AwsClient } from "npm:aws4fetch@1.0.20";
-import sharp from "npm:sharp@0.33.2";
+import {
+  ImageMagick,
+  initializeImageMagick,
+  MagickFormat,
+  MagickGeometry,
+} from "npm:@imagemagick/magick-wasm@0.0.30";
+
+const wasmBytes = await Deno.readFile(
+  new URL(
+    "magick.wasm",
+    import.meta.resolve("npm:@imagemagick/magick-wasm@0.0.30")
+  )
+);
+await initializeImageMagick(wasmBytes);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,8 +78,11 @@ Deno.serve(async (req: Request) => {
     if (!assets || assets.length === 0) {
       return jsonResponse({
         message: "No assets left to generate thumbnails for",
+        total: 0,
         generated: 0,
+        errors: 0,
         dry_run: dryRun,
+        results: [],
       });
     }
 
@@ -93,12 +109,19 @@ Deno.serve(async (req: Request) => {
       const thumbnailKey = `thumbnails/${pathWithoutExt}.webp`;
 
       if (dryRun) {
-        results.push({ id: asset.id, key, thumbnail_key: thumbnailKey, status: "skipped" });
+        results.push({
+          id: asset.id,
+          key,
+          thumbnail_key: thumbnailKey,
+          status: "skipped",
+        });
         continue;
       }
 
       try {
-        const getRes = await r2.fetch(`${r2Endpoint}/${key}`, { method: "GET" });
+        const getRes = await r2.fetch(`${r2Endpoint}/${key}`, {
+          method: "GET",
+        });
         if (!getRes.ok) {
           results.push({
             id: asset.id,
@@ -110,12 +133,21 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        const originalBuffer = await getRes.arrayBuffer();
+        const originalBuffer = new Uint8Array(await getRes.arrayBuffer());
 
-        const webpBuffer = await sharp(Buffer.from(originalBuffer))
-          .resize(width, width, { fit: "inside", withoutEnlargement: true })
-          .webp({ quality })
-          .toBuffer();
+        const webpBuffer = ImageMagick.read(
+          originalBuffer,
+          (img): Uint8Array => {
+            const geo = new MagickGeometry(width, width);
+            geo.ignoreAspectRatio = false;
+            geo.greater = true;
+            img.resize(geo);
+            img.quality = quality;
+            return img.write(MagickFormat.Webp, (data) =>
+              new Uint8Array(data)
+            );
+          }
+        );
 
         const putRes = await r2.fetch(`${r2Endpoint}/${thumbnailKey}`, {
           method: "PUT",
@@ -128,11 +160,19 @@ Deno.serve(async (req: Request) => {
 
         if (!putRes.ok) {
           const errText = await putRes.text();
-          results.push({ id: asset.id, key, thumbnail_key: thumbnailKey, status: "error", error: errText });
+          results.push({
+            id: asset.id,
+            key,
+            thumbnail_key: thumbnailKey,
+            status: "error",
+            error: errText,
+          });
           continue;
         }
 
-        const headRes = await r2.fetch(`${r2Endpoint}/${thumbnailKey}`, { method: "HEAD" });
+        const headRes = await r2.fetch(`${r2Endpoint}/${thumbnailKey}`, {
+          method: "HEAD",
+        });
         if (!headRes.ok) {
           results.push({
             id: asset.id,
@@ -153,14 +193,31 @@ Deno.serve(async (req: Request) => {
           .eq("id", asset.id);
 
         if (updateErr) {
-          results.push({ id: asset.id, key, thumbnail_key: thumbnailKey, status: "error", error: updateErr.message });
+          results.push({
+            id: asset.id,
+            key,
+            thumbnail_key: thumbnailKey,
+            status: "error",
+            error: updateErr.message,
+          });
           continue;
         }
 
-        results.push({ id: asset.id, key, thumbnail_key: thumbnailKey, status: "generated" });
+        results.push({
+          id: asset.id,
+          key,
+          thumbnail_key: thumbnailKey,
+          status: "generated",
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
-        results.push({ id: asset.id, key, thumbnail_key: thumbnailKey, status: "error", error: msg });
+        results.push({
+          id: asset.id,
+          key,
+          thumbnail_key: thumbnailKey,
+          status: "error",
+          error: msg,
+        });
       }
     }
 
