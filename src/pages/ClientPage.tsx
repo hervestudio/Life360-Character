@@ -334,7 +334,9 @@ export default function ClientPage() {
           const y = (size - h) / 2 + t.offset_y * scaleFactor
           ctx.drawImage(img, x, y, w, h)
         }
-      } catch {}
+      } catch (e) {
+        console.warn("Export PNG: layer skipped", l.asset?.category, l.asset?.id, e)
+      }
     }
     const slug = (v: string | null | undefined) =>
       (v ?? "")
