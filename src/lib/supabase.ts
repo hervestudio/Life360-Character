@@ -590,7 +590,7 @@ export async function generateThumbnails(opts: {
     headers,
     body: JSON.stringify({
       dry_run: opts.dry_run ?? false,
-      batch_size: opts.batch_size ?? 50,
+      batch_size: opts.batch_size ?? 3,
       width: opts.width ?? 512,
       quality: opts.quality ?? 80,
     }),

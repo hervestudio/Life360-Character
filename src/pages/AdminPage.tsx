@@ -1321,7 +1321,7 @@ function ThumbnailsView() {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [runningAll, setRunningAll] = useState(false)
-  const [batchSize, setBatchSize] = useState(50)
+  const [batchSize, setBatchSize] = useState(3)
   const [quality, setQuality] = useState(80)
   const [log, setLog] = useState<{ message: string; generated: number; errors: number; total: number }[]>([])
   const abortRef = useRef(false)
@@ -1352,7 +1352,14 @@ function ThumbnailsView() {
       }
       return result
     } catch (err: any) {
-      toast.error(err.message ?? "Thumbnail generation failed")
+      const msg = err.message ?? "Thumbnail generation failed"
+      const isResourceLimit = msg.includes("WORKER_RESOURCE_LIMIT") || msg.includes("compute resources")
+      if (isResourceLimit) {
+        toast.error("Resource limit hit -- some thumbnails may have been generated. Refreshing count.")
+      } else {
+        toast.error(msg)
+      }
+      await refreshCount()
       return null
     } finally {
       setRunning(false)
@@ -1441,9 +1448,9 @@ function ThumbnailsView() {
                   <Input
                     type="number"
                     min={1}
-                    max={200}
+                    max={5}
                     value={batchSize}
-                    onChange={(e) => setBatchSize(Math.min(200, Math.max(1, parseInt(e.target.value) || 50)))}
+                    onChange={(e) => setBatchSize(Math.min(5, Math.max(1, parseInt(e.target.value) || 3)))}
                     className="h-8 w-24 rounded-none text-xs"
                     disabled={running}
                   />
