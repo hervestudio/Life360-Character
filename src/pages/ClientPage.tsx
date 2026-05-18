@@ -507,9 +507,9 @@ export default function ClientPage() {
               ) : (
                 <>
                   {outfit ? (
-                    <BodyLayer src={publicUrl(outfit.storage_path, outfit.storage_provider)} z={layerOrder.find((l) => l.category === "body")?.z_index ?? 1} />
+                    <BodyLayer src={thumbnailUrl(outfit)} z={layerOrder.find((l) => l.category === "body")?.z_index ?? 1} />
                   ) : (
-                    <BodyLayer src={publicUrl(body.storage_path, body.storage_provider)} z={layerOrder.find((l) => l.category === "body")?.z_index ?? 1} />
+                    <BodyLayer src={thumbnailUrl(body)} z={layerOrder.find((l) => l.category === "body")?.z_index ?? 1} />
                   )}
                   {hair && <OverlayLayer asset={hair} bodyId={body.id} defaults={defaults} z={layerOrder.find((l) => l.category === "hair")?.z_index ?? 2} />}
                   {accessory && <OverlayLayer asset={accessory} bodyId={body.id} defaults={defaults} z={layerOrder.find((l) => l.category === "accessory")?.z_index ?? 3} />}
@@ -631,8 +631,9 @@ function HairThumb({
   layerOrder: LayerOrder[]
   active: boolean
 }) {
-  const bodySrc = publicUrl(body.storage_path, body.storage_provider)
-  const hairSrc = publicUrl(hair.storage_path, hair.storage_provider)
+  const bodyThumb = thumbnailUrl(body)
+  const hairThumb = thumbnailUrl(hair)
+  const hairFullSrc = publicUrl(hair.storage_path, hair.storage_provider)
   const [bodyLoaded, setBodyLoaded] = useState(false)
   const [hairLoaded, setHairLoaded] = useState(false)
   const [hairSize, setHairSize] = useState<{ w: number; h: number } | null>(null)
@@ -642,9 +643,9 @@ function HairThumb({
     const img = new Image()
     img.decoding = "async"
     img.onload = () => setBodyLoaded(true)
-    img.src = bodySrc
+    img.src = bodyThumb
     if (img.complete && img.naturalWidth > 0) setBodyLoaded(true)
-  }, [bodySrc])
+  }, [bodyThumb])
 
   useEffect(() => {
     setHairLoaded(false)
@@ -655,12 +656,12 @@ function HairThumb({
       setHairSize({ w: img.naturalWidth, h: img.naturalHeight })
       setHairLoaded(true)
     }
-    img.src = hairSrc
+    img.src = hairFullSrc
     if (img.complete && img.naturalWidth > 0) {
       setHairSize({ w: img.naturalWidth, h: img.naturalHeight })
       setHairLoaded(true)
     }
-  }, [hairSrc])
+  }, [hairFullSrc])
 
   const ready = bodyLoaded && hairLoaded && hairSize
   const t = resolveTransform(hair, body.id, defaults) ?? IDENTITY_TRANSFORM
@@ -691,7 +692,7 @@ function HairThumb({
         }}
       >
         <img
-          src={bodySrc}
+          src={bodyThumb}
           alt=""
           loading="eager"
           decoding="async"
@@ -700,7 +701,7 @@ function HairThumb({
         />
         {hairSize && (
           <img
-            src={hairSrc}
+            src={hairThumb}
             alt=""
             loading="eager"
             decoding="async"
@@ -760,13 +761,14 @@ function OverlayLayer({
   const [size, setSize] = useState<{ w: number; h: number } | null>(null)
   const rawUrl = publicUrl(asset.storage_path, asset.storage_provider)
   const resolvedSrc = useAssetSrc(rawUrl, colors ?? null)
-  const src = resolvedSrc ?? rawUrl
+  const isSvg = isSvgPath(asset.storage_path)
+  const displaySrc = resolvedSrc ?? (isSvg ? rawUrl : thumbnailUrl(asset))
   useEffect(() => {
-    if (isSvgPath(rawUrl)) { setSize({ w: CANVAS, h: CANVAS }); return }
+    if (isSvg) { setSize({ w: CANVAS, h: CANVAS }); return }
     const img = new Image()
     img.onload = () => setSize({ w: img.naturalWidth, h: img.naturalHeight })
     img.src = rawUrl
-  }, [rawUrl])
+  }, [rawUrl, isSvg])
   if (!size) return null
   const t: Transform = transformOverride ?? resolveTransform(asset, bodyId, defaults)
   const wPct = ((size.w * t.scale) / CANVAS) * 100
@@ -775,7 +777,7 @@ function OverlayLayer({
   const topPct = (((CANVAS - size.h * t.scale) / 2 + t.offset_y) / CANVAS) * 100
   return (
     <img
-      src={src}
+      src={displaySrc}
       alt=""
       style={{
         zIndex: z,
