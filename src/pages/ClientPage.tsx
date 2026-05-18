@@ -142,7 +142,7 @@ export default function ClientPage() {
         setDefaultOutfits(defOutfits)
         rows.forEach((r) => {
           const img = new Image()
-          img.src = publicUrl(r.storage_path)
+          img.src = publicUrl(r.storage_path, r.storage_provider)
         })
         const b = builderInit?.builder
         if (b) {
@@ -277,7 +277,7 @@ export default function ClientPage() {
         img.onerror = reject
         img.src = src
       })
-    const bodyImg = body ? await load(publicUrl(body.storage_path)).catch(() => null) : null
+    const bodyImg = body ? await load(publicUrl(body.storage_path, body.storage_provider)).catch(() => null) : null
     const nativeSize = bodyImg ? Math.max(bodyImg.naturalWidth, bodyImg.naturalHeight) : CANVAS
     const size = Math.max(CANVAS, nativeSize)
     const canvas = document.createElement("canvas")
@@ -297,7 +297,7 @@ export default function ClientPage() {
     for (const l of allLayers) {
       if (!l.asset) continue
       try {
-        let layerSrc = publicUrl(l.asset.storage_path)
+        let layerSrc = publicUrl(l.asset.storage_path, l.asset.storage_provider)
         if (isSvgPath(l.asset.storage_path)) {
           try {
             let text = await fetchSvgText(layerSrc)
@@ -507,9 +507,9 @@ export default function ClientPage() {
               ) : (
                 <>
                   {outfit ? (
-                    <BodyLayer src={publicUrl(outfit.storage_path)} z={layerOrder.find((l) => l.category === "body")?.z_index ?? 1} />
+                    <BodyLayer src={publicUrl(outfit.storage_path, outfit.storage_provider)} z={layerOrder.find((l) => l.category === "body")?.z_index ?? 1} />
                   ) : (
-                    <BodyLayer src={publicUrl(body.storage_path)} z={layerOrder.find((l) => l.category === "body")?.z_index ?? 1} />
+                    <BodyLayer src={publicUrl(body.storage_path, body.storage_provider)} z={layerOrder.find((l) => l.category === "body")?.z_index ?? 1} />
                   )}
                   {hair && <OverlayLayer asset={hair} bodyId={body.id} defaults={defaults} z={layerOrder.find((l) => l.category === "hair")?.z_index ?? 2} />}
                   {accessory && <OverlayLayer asset={accessory} bodyId={body.id} defaults={defaults} z={layerOrder.find((l) => l.category === "accessory")?.z_index ?? 3} />}
@@ -580,7 +580,7 @@ export default function ClientPage() {
                         ) : (
                           <div className="relative flex flex-1 w-full items-center justify-center p-3">
                             <img
-                              src={publicUrl(a.storage_path)}
+                              src={publicUrl(a.storage_path, a.storage_provider)}
                               alt={label}
                               className="max-h-full max-w-full object-contain"
                             />
@@ -631,8 +631,8 @@ function HairThumb({
   layerOrder: LayerOrder[]
   active: boolean
 }) {
-  const bodySrc = publicUrl(body.storage_path)
-  const hairSrc = publicUrl(hair.storage_path)
+  const bodySrc = publicUrl(body.storage_path, body.storage_provider)
+  const hairSrc = publicUrl(hair.storage_path, hair.storage_provider)
   const [bodyLoaded, setBodyLoaded] = useState(false)
   const [hairLoaded, setHairLoaded] = useState(false)
   const [hairSize, setHairSize] = useState<{ w: number; h: number } | null>(null)
@@ -758,7 +758,7 @@ function OverlayLayer({
   colors?: Record<string, string> | null
 }) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null)
-  const rawUrl = publicUrl(asset.storage_path)
+  const rawUrl = publicUrl(asset.storage_path, asset.storage_provider)
   const resolvedSrc = useAssetSrc(rawUrl, colors ?? null)
   const src = resolvedSrc ?? rawUrl
   useEffect(() => {

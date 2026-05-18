@@ -594,7 +594,7 @@ function EditAssetDialog({
             </div>
             <div className="flex items-center gap-3">
               <div className="relative h-16 w-16 flex-shrink-0 border border-border bg-[#fbf7f1]">
-                <img src={publicUrl(asset.storage_path)} alt="" className="absolute inset-0 h-full w-full object-contain" />
+                <img src={publicUrl(asset.storage_path, asset.storage_provider)} alt="" className="absolute inset-0 h-full w-full object-contain" />
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <Input
@@ -1012,7 +1012,7 @@ export default function AdminPage() {
               <div key={a.id} className={`group space-y-2 ${a.is_active ? "" : "opacity-50"}`}>
                 <div className="relative">
                   <Checker>
-                    <img src={publicUrl(a.storage_path)} alt={a.label} className="absolute inset-0 h-full w-full object-contain" />
+                    <img src={publicUrl(a.storage_path, a.storage_provider)} alt={a.label} className="absolute inset-0 h-full w-full object-contain" />
                   </Checker>
                   <button
                     onClick={() => toggleSelect(a.id)}
@@ -1266,7 +1266,7 @@ function LayersView({
                 return (
                   <img
                     key={row.category}
-                    src={publicUrl(asset.storage_path)}
+                    src={publicUrl(asset.storage_path, asset.storage_provider)}
                     alt=""
                     style={{ zIndex: row.z_index, mixBlendMode: blend as any }}
                     className="pointer-events-none absolute inset-0 h-full w-full object-contain"
@@ -1304,7 +1304,7 @@ function LayerPreviewOverlay({
   z: number
   blend?: GlobalCompositeOperation
 }) {
-  const size = useNaturalSize(publicUrl(asset.storage_path))
+  const size = useNaturalSize(publicUrl(asset.storage_path, asset.storage_provider))
   if (!size) return null
   const t: Transform = resolveTransform(asset, bodyId, defaults)
   const wPct = (size.w * t.scale) / CANVAS * 100
@@ -1313,7 +1313,7 @@ function LayerPreviewOverlay({
   const topPct = ((CANVAS - size.h * t.scale) / 2 + t.offset_y) / CANVAS * 100
   return (
     <img
-      src={publicUrl(asset.storage_path)}
+      src={publicUrl(asset.storage_path, asset.storage_provider)}
       alt=""
       style={{
         zIndex: z,
@@ -1435,7 +1435,7 @@ function PositioningView({
     }
   }, [assets.length, category, compatibleHeads, headId])
   const head = compatibleHeads.find((h) => h.id === headId) ?? null
-  const headSize = useNaturalSize(head ? publicUrl(head.storage_path) : "")
+  const headSize = useNaturalSize(head ? publicUrl(head.storage_path, head.storage_provider) : "")
   const headExprOverride = headExprDefaults.find((h) => h.head_id === headId) ?? null
 
   const categoryAssets = useMemo(
@@ -1480,7 +1480,7 @@ function PositioningView({
     : { offset_x: 0, offset_y: 0, scale: 1 }
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
-  const previewSize = useNaturalSize(previewAsset ? publicUrl(previewAsset.storage_path) : "")
+  const previewSize = useNaturalSize(previewAsset ? publicUrl(previewAsset.storage_path, previewAsset.storage_provider) : "")
 
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
@@ -1736,7 +1736,7 @@ function PositioningView({
           >
             {body ? (
               <img
-                src={publicUrl(body.storage_path)}
+                src={publicUrl(body.storage_path, body.storage_provider)}
                 alt=""
                 className="pointer-events-none absolute inset-0 h-full w-full object-contain"
                 style={{ zIndex: bodyZ }}
@@ -1760,7 +1760,7 @@ function PositioningView({
                 void t
                 return (
                   <img
-                    src={publicUrl(head.storage_path)}
+                    src={publicUrl(head.storage_path, head.storage_provider)}
                     alt=""
                     className="pointer-events-none absolute"
                     style={{
@@ -2086,7 +2086,7 @@ function InteractiveLayer({
   colors?: Record<string, string> | null
   hideHandles?: boolean
 }) {
-  const rawUrl = publicUrl(asset.storage_path)
+  const rawUrl = publicUrl(asset.storage_path, asset.storage_provider)
   const resolvedSrc = useAssetSrc(rawUrl, colors)
   const src = resolvedSrc ?? rawUrl
   const wPct = (naturalSize.w * transform.scale) / CANVAS * 100
@@ -2266,7 +2266,7 @@ function AssetOverrideCard({
           title="Preview this asset"
         >
           <img
-            src={publicUrl(asset.storage_path)}
+            src={publicUrl(asset.storage_path, asset.storage_provider)}
             alt=""
             className="absolute inset-0 h-full w-full object-contain"
           />
@@ -2370,7 +2370,7 @@ function ExpressionColorCard({
   }, [expanded])
   const [slots, setSlots] = useState<{ id: string; defaultFill: string; displayName: string; synthetic: boolean }[]>([])
   const [saving, setSaving] = useState(false)
-  const url = publicUrl(asset.storage_path)
+  const url = publicUrl(asset.storage_path, asset.storage_provider)
 
   useEffect(() => {
     let cancelled = false

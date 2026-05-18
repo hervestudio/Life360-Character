@@ -55,6 +55,8 @@ export const SKIN_TONES: { key: SkinTone; label: string; swatch: string }[] = [
   { key: "dark", label: "Dark", swatch: "#6b3f2a" },
 ]
 
+export type StorageProvider = "supabase" | "r2"
+
 export interface Asset {
   id: string
   category: AssetCategory
@@ -63,6 +65,7 @@ export interface Asset {
   gender: Gender | null
   skin_tone: SkinTone | null
   storage_path: string
+  storage_provider: StorageProvider
   swatch_color: string | null
   display_order: number
   is_active: boolean
@@ -106,8 +109,30 @@ export function resolveTransform(
 
 const BUCKET = "character-assets"
 
-export function publicUrl(path: string): string {
+const USE_R2 = import.meta.env.VITE_USE_R2 === "true"
+const R2_PUBLIC_BASE_URL = (import.meta.env.VITE_R2_PUBLIC_BASE_URL as string) || ""
+
+export function publicUrl(path: string, provider?: StorageProvider): string {
+  const resolvedProvider = provider ?? "supabase"
+  if (resolvedProvider === "r2" && R2_PUBLIC_BASE_URL) {
+    const base = R2_PUBLIC_BASE_URL.replace(/\/$/, "")
+    return `${base}/${path}`
+  }
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+}
+
+function r2FunctionUrl(action: string): string {
+  return `${url}/functions/v1/r2-storage?action=${action}`
+}
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token ?? anonKey
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    Apikey: anonKey,
+  }
 }
 
 export async function fetchAssets(opts: { onlyActive?: boolean } = {}): Promise<Asset[]> {
@@ -135,11 +160,28 @@ export async function uploadAsset(input: UploadInput): Promise<Asset> {
   const folder = input.category
   const storagePath = `${folder}/${slug}-${ts}.${ext}`
 
-  const { error: upErr } = await supabase.storage.from(BUCKET).upload(storagePath, input.file, {
-    contentType: input.file.type || "image/png",
-    upsert: false,
-  })
-  if (upErr) throw upErr
+  if (USE_R2) {
+    const headers = await getAuthHeaders()
+    const formData = new FormData()
+    formData.append("file", input.file)
+    formData.append("key", storagePath)
+    formData.append("contentType", input.file.type || "image/png")
+    const uploadRes = await fetch(r2FunctionUrl("upload"), {
+      method: "POST",
+      headers: { Authorization: headers.Authorization, Apikey: headers.Apikey },
+      body: formData,
+    })
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text()
+      throw new Error(`R2 upload failed: ${err}`)
+    }
+  } else {
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(storagePath, input.file, {
+      contentType: input.file.type || "image/png",
+      upsert: false,
+    })
+    if (upErr) throw upErr
+  }
 
   const needsSkin = input.category === "body" || input.category === "hair"
   const row = {
@@ -150,10 +192,20 @@ export async function uploadAsset(input: UploadInput): Promise<Asset> {
     skin_tone: needsSkin ? input.skin_tone ?? null : null,
     parent_body_id: input.category === "outfit" ? input.parent_body_id ?? null : null,
     storage_path: storagePath,
+    storage_provider: USE_R2 ? "r2" as const : "supabase" as const,
   }
   const { data, error } = await supabase.from("assets").insert(row).select("*").maybeSingle()
   if (error || !data) {
-    await supabase.storage.from(BUCKET).remove([storagePath])
+    if (USE_R2) {
+      const headers = await getAuthHeaders()
+      await fetch(r2FunctionUrl("delete"), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ keys: [storagePath] }),
+      })
+    } else {
+      await supabase.storage.from(BUCKET).remove([storagePath])
+    }
     throw error ?? new Error("Insert failed")
   }
   return data as Asset
@@ -162,7 +214,16 @@ export async function uploadAsset(input: UploadInput): Promise<Asset> {
 export async function deleteAsset(asset: Asset): Promise<void> {
   const { error } = await supabase.from("assets").delete().eq("id", asset.id)
   if (error) throw error
-  await supabase.storage.from(BUCKET).remove([asset.storage_path])
+  if (asset.storage_provider === "r2") {
+    const headers = await getAuthHeaders()
+    await fetch(r2FunctionUrl("delete"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ keys: [asset.storage_path] }),
+    })
+  } else {
+    await supabase.storage.from(BUCKET).remove([asset.storage_path])
+  }
 }
 
 export interface AssetParamsPatch {
@@ -187,23 +248,59 @@ export async function replaceAssetFile(asset: Asset, file: File): Promise<void> 
   const ts = Date.now()
   const folder = asset.category
   const storagePath = `${folder}/${slug}-${ts}.${ext}`
+  const newProvider: StorageProvider = USE_R2 ? "r2" : "supabase"
 
-  const { error: upErr } = await supabase.storage.from(BUCKET).upload(storagePath, file, {
-    contentType: file.type || "image/png",
-    upsert: false,
-  })
-  if (upErr) throw upErr
+  if (USE_R2) {
+    const headers = await getAuthHeaders()
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("key", storagePath)
+    formData.append("contentType", file.type || "image/png")
+    const uploadRes = await fetch(r2FunctionUrl("upload"), {
+      method: "POST",
+      headers: { Authorization: headers.Authorization, Apikey: headers.Apikey },
+      body: formData,
+    })
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text()
+      throw new Error(`R2 upload failed: ${err}`)
+    }
+  } else {
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(storagePath, file, {
+      contentType: file.type || "image/png",
+      upsert: false,
+    })
+    if (upErr) throw upErr
+  }
 
   const { error } = await supabase
     .from("assets")
-    .update({ storage_path: storagePath, updated_at: new Date().toISOString() })
+    .update({ storage_path: storagePath, storage_provider: newProvider, updated_at: new Date().toISOString() })
     .eq("id", asset.id)
   if (error) {
-    await supabase.storage.from(BUCKET).remove([storagePath])
+    if (USE_R2) {
+      const headers = await getAuthHeaders()
+      await fetch(r2FunctionUrl("delete"), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ keys: [storagePath] }),
+      })
+    } else {
+      await supabase.storage.from(BUCKET).remove([storagePath])
+    }
     throw error
   }
 
-  await supabase.storage.from(BUCKET).remove([asset.storage_path])
+  if (asset.storage_provider === "r2") {
+    const headers = await getAuthHeaders()
+    await fetch(r2FunctionUrl("delete"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ keys: [asset.storage_path] }),
+    })
+  } else {
+    await supabase.storage.from(BUCKET).remove([asset.storage_path])
+  }
 }
 
 export async function setAssetActive(id: string, active: boolean): Promise<void> {
