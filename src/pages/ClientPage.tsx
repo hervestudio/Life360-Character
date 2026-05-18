@@ -760,9 +760,9 @@ function OverlayLayer({
 }) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null)
   const rawUrl = publicUrl(asset.storage_path, asset.storage_provider)
-  const resolvedSrc = useAssetSrc(rawUrl, colors ?? null)
   const isSvg = isSvgPath(asset.storage_path)
-  const displaySrc = resolvedSrc ?? (isSvg ? rawUrl : thumbnailUrl(asset))
+  const resolvedSrc = useAssetSrc(isSvg ? rawUrl : null, colors ?? null)
+  const displaySrc = isSvg ? (resolvedSrc ?? rawUrl) : thumbnailUrl(asset)
   useEffect(() => {
     if (isSvg) { setSize({ w: CANVAS, h: CANVAS }); return }
     const img = new Image()
