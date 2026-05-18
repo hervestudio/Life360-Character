@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Layers, LogOut, Move, Pencil, Plus, Power, RotateCcw, Trash2, Upload as UploadIcon, X } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, HardDrive, Layers, LogOut, Move, Pencil, Plus, Power, RotateCcw, Trash2, Upload as UploadIcon, X } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,11 +17,13 @@ import {
   DEFAULT_LAYER_ORDER,
   SKIN_TONES,
   clearBodyDefaultOutfit,
+  countSupabaseAssets,
   deleteHeadExpressionColors,
   deleteHeadExpressionDefault,
   fetchBodyDefaultOutfits,
   fetchHeadExpressionColors,
   fetchHeadExpressionDefaults,
+  migrateToR2,
   setBodyDefaultOutfit,
   upsertHeadExpressionColors,
   upsertHeadExpressionDefault,
@@ -642,7 +644,7 @@ function EditAssetDialog({
 export default function AdminPage() {
   const location = useLocation()
   const navState = (location.state ?? null) as null | {
-    view?: "library" | "positioning" | "layers"
+    view?: "library" | "positioning" | "layers" | "migrate"
     positioning?: {
       age?: AgeGroup
       gender?: Gender
@@ -665,7 +667,7 @@ export default function AdminPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [editAsset, setEditAsset] = useState<Asset | null>(null)
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<"library" | "positioning" | "layers">(navState?.view ?? "library")
+  const [view, setView] = useState<"library" | "positioning" | "layers" | "migrate">(navState?.view ?? "library")
   const [positioningInit] = useState(navState?.positioning)
   const [positioningSel, setPositioningSel] = useState<PositioningSelection | null>(null)
   const [layerOrder, setLayerOrder] = useState<LayerOrder[]>(DEFAULT_LAYER_ORDER)
@@ -937,11 +939,21 @@ export default function AdminPage() {
             >
               <Layers className="h-3 w-3" /> Layers
             </button>
+            <button
+              onClick={() => setView("migrate")}
+              className={`inline-flex items-center gap-1 border px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] transition ${view === "migrate" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"}`}
+            >
+              <HardDrive className="h-3 w-3" /> Migrate
+            </button>
           </div>
         </div>
       </header>
 
-      {view === "layers" ? (
+      {view === "migrate" ? (
+        <AdminErrorBoundary viewName="Migrate">
+          <MigrateView />
+        </AdminErrorBoundary>
+      ) : view === "layers" ? (
         <AdminErrorBoundary viewName="Layers">
           <LayersView layerOrder={layerOrder} assets={assets} defaults={defaults} onChanged={load} />
         </AdminErrorBoundary>
@@ -1083,6 +1095,212 @@ const LAYER_LABELS: Record<LayerOrder["category"], string> = {
   hair: "Head",
   accessory: "Accessory",
   expression: "Expression",
+}
+
+function MigrateView() {
+  const [remaining, setRemaining] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [runningAll, setRunningAll] = useState(false)
+  const [batchSize, setBatchSize] = useState(50)
+  const [log, setLog] = useState<{ message: string; migrated: number; errors: number; total: number }[]>([])
+  const abortRef = useRef(false)
+
+  async function refreshCount() {
+    try {
+      const count = await countSupabaseAssets()
+      setRemaining(count)
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to count assets")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { refreshCount() }, [])
+
+  async function runBatch(dryRun: boolean) {
+    setRunning(true)
+    try {
+      const result = await migrateToR2({ dry_run: dryRun, batch_size: batchSize })
+      setLog((prev) => [{ message: result.message, migrated: result.migrated, errors: result.errors, total: result.total }, ...prev])
+      if (!dryRun) {
+        toast.success(result.message)
+        await refreshCount()
+      } else {
+        toast.info(`Dry run: ${result.total} assets would be migrated`)
+      }
+      return result
+    } catch (err: any) {
+      toast.error(err.message ?? "Migration failed")
+      return null
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  async function runAll() {
+    setRunningAll(true)
+    abortRef.current = false
+    let totalMigrated = 0
+    let totalErrors = 0
+    let batchCount = 0
+
+    while (!abortRef.current) {
+      setRunning(true)
+      try {
+        const result = await migrateToR2({ dry_run: false, batch_size: batchSize })
+        batchCount++
+        totalMigrated += result.migrated
+        totalErrors += result.errors
+        setLog((prev) => [{ message: `Batch ${batchCount}: ${result.message}`, migrated: result.migrated, errors: result.errors, total: result.total }, ...prev])
+        await refreshCount()
+        if (result.migrated === 0 && result.errors === 0) break
+        if (result.total === 0) break
+        await new Promise((r) => setTimeout(r, 500))
+      } catch (err: any) {
+        toast.error(err.message ?? "Migration failed")
+        break
+      } finally {
+        setRunning(false)
+      }
+    }
+
+    setRunningAll(false)
+    if (abortRef.current) {
+      toast.info(`Stopped. Migrated ${totalMigrated} assets across ${batchCount} batches.`)
+    } else {
+      toast.success(`Done! Migrated ${totalMigrated} assets across ${batchCount} batches. ${totalErrors} errors.`)
+    }
+  }
+
+  function stopAll() {
+    abortRef.current = true
+  }
+
+  return (
+    <main className="mx-auto max-w-[800px] px-8 py-10">
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <h2 className="font-serif text-2xl font-light italic">Migrate to R2</h2>
+          <p className="text-sm text-muted-foreground">
+            Move existing assets from Supabase Storage to Cloudflare R2. Each batch downloads files, uploads them to R2, verifies, then updates the database record.
+          </p>
+        </div>
+
+        <div className="border border-border p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Assets remaining on Supabase</p>
+              <p className="text-3xl font-light mt-1">
+                {loading ? "..." : remaining ?? 0}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-none text-[10px] uppercase tracking-[0.2em]"
+              onClick={refreshCount}
+              disabled={running}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" /> Refresh
+            </Button>
+          </div>
+
+          {remaining === 0 && !loading && (
+            <div className="border border-border bg-muted/30 px-4 py-3">
+              <p className="text-sm text-muted-foreground">All assets have been migrated to R2.</p>
+            </div>
+          )}
+
+          {(remaining ?? 0) > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Batch size</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={batchSize}
+                    onChange={(e) => setBatchSize(Math.min(200, Math.max(1, parseInt(e.target.value) || 50)))}
+                    className="h-8 w-24 rounded-none text-xs"
+                    disabled={running}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="rounded-none text-[10px] uppercase tracking-[0.2em]"
+                  onClick={() => runBatch(true)}
+                  disabled={running}
+                >
+                  Dry Run
+                </Button>
+                <Button
+                  className="rounded-none text-[10px] uppercase tracking-[0.2em]"
+                  onClick={() => runBatch(false)}
+                  disabled={running}
+                >
+                  {running && !runningAll ? "Migrating..." : "Migrate Batch"}
+                </Button>
+                {!runningAll ? (
+                  <Button
+                    className="rounded-none text-[10px] uppercase tracking-[0.2em]"
+                    onClick={runAll}
+                    disabled={running}
+                  >
+                    Migrate All
+                  </Button>
+                ) : (
+                  <Button
+                    variant="destructive"
+                    className="rounded-none text-[10px] uppercase tracking-[0.2em]"
+                    onClick={stopAll}
+                  >
+                    Stop
+                  </Button>
+                )}
+              </div>
+
+              {runningAll && remaining !== null && (
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                    Running all batches...
+                  </p>
+                  <Progress value={remaining === 0 ? 100 : Math.max(5, 100 - (remaining / (remaining + log.reduce((s, l) => s + l.migrated, 0) || 1)) * 100)} className="h-2" />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {log.length > 0 && (
+          <div className="border border-border">
+            <div className="border-b border-border px-4 py-2 flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Migration log</p>
+              <button
+                onClick={() => setLog([])}
+                className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="max-h-[300px] overflow-y-auto divide-y divide-border">
+              {log.map((entry, i) => (
+                <div key={i} className="px-4 py-2 text-xs font-mono">
+                  <span className="text-muted-foreground">{entry.message}</span>
+                  {entry.errors > 0 && <span className="ml-2 text-destructive">({entry.errors} errors)</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  )
 }
 
 function LayersView({

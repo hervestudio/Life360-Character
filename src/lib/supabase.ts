@@ -527,3 +527,35 @@ export async function saveCharacter(name: string, config: CharacterConfig) {
   if (error) throw error
   return data
 }
+
+export interface MigrateResult {
+  message: string
+  total: number
+  migrated: number
+  errors: number
+  dry_run: boolean
+  results: { id: string; key: string; status: "migrated" | "skipped" | "error"; error?: string }[]
+}
+
+export async function migrateToR2(opts: { dry_run?: boolean; batch_size?: number } = {}): Promise<MigrateResult> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${url}/functions/v1/r2-migrate`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ dry_run: opts.dry_run ?? false, batch_size: opts.batch_size ?? 50 }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || `Migration request failed (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function countSupabaseAssets(): Promise<number> {
+  const { count, error } = await supabase
+    .from("assets")
+    .select("*", { count: "exact", head: true })
+    .eq("storage_provider", "supabase")
+  if (error) throw error
+  return count ?? 0
+}
