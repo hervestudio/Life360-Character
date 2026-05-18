@@ -277,7 +277,8 @@ export default function ClientPage() {
         img.onerror = reject
         img.src = src
       })
-    const bodyImg = body ? await load(publicUrl(body.storage_path, body.storage_provider)).catch(() => null) : null
+    const bodyAsset = outfit ?? body
+    const bodyImg = bodyAsset ? await load(thumbnailUrl(bodyAsset)).catch(() => null) : null
     const nativeSize = bodyImg ? Math.max(bodyImg.naturalWidth, bodyImg.naturalHeight) : CANVAS
     const size = Math.max(CANVAS, nativeSize)
     const canvas = document.createElement("canvas")
@@ -297,10 +298,12 @@ export default function ClientPage() {
     for (const l of allLayers) {
       if (!l.asset) continue
       try {
-        let layerSrc = publicUrl(l.asset.storage_path, l.asset.storage_provider)
-        if (isSvgPath(l.asset.storage_path)) {
+        const isSvg = isSvgPath(l.asset.storage_path)
+        let layerSrc: string
+        if (isSvg) {
+          const rawUrl = publicUrl(l.asset.storage_path, l.asset.storage_provider)
           try {
-            let text = await fetchSvgText(layerSrc)
+            let text = await fetchSvgText(rawUrl)
             if (l.asset.category === "expression") {
               const override = hair ? headExprColors.find((c) => c.head_id === hair.id && c.expression_id === l.asset!.id)?.colors : null
               if (override && Object.keys(override).length > 0) {
@@ -309,9 +312,13 @@ export default function ClientPage() {
             }
             text = setSvgDimensions(text, size, size)
             layerSrc = svgToDataUrl(text)
-          } catch {}
+          } catch {
+            layerSrc = svgToDataUrl(await fetchSvgText(rawUrl))
+          }
+        } else {
+          layerSrc = thumbnailUrl(l.asset)
         }
-        const img = l.asset.id === body?.id && bodyImg ? bodyImg : await load(layerSrc)
+        const img = l.asset.id === bodyAsset?.id && bodyImg ? bodyImg : await load(layerSrc)
         ctx.globalCompositeOperation = (l.blend && l.blend !== "normal" ? l.blend : "source-over") as GlobalCompositeOperation
         if (l.asset.category === "body" || l.asset.category === "outfit") {
           const scale = Math.min(size / img.naturalWidth, size / img.naturalHeight)
@@ -322,7 +329,6 @@ export default function ClientPage() {
           const t = l.asset.category === "expression"
             ? resolveExpressionTransform(l.asset, hair?.id ?? null, body?.id ?? null, defaults, headExprDefaults)
             : resolveTransform(l.asset, body?.id ?? null, defaults)
-          const isSvg = isSvgPath(l.asset.storage_path)
           const baseW = isSvg ? size : img.naturalWidth
           const baseH = isSvg ? size : img.naturalHeight
           const w = isSvg ? baseW * t.scale : baseW * t.scale * scaleFactor
