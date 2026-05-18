@@ -302,6 +302,7 @@ function UploadDialog({
       onUploaded()
       onOpenChange(false)
       reset()
+      generateThumbnails({ batch_size: files.length, width: 2048 }).catch(() => {})
     } catch (err: any) {
       toast.error(err.message ?? "Upload failed.")
     } finally {
