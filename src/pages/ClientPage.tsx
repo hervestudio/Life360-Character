@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AgeGroup, Asset, BodyDefaultOutfit, CategoryDefault, Gender, HeadExpressionColor, HeadExpressionDefault, LayerOrder, SkinTone, Transform } from "@/lib/supabase"
-import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, isCurrentUserAdmin, publicUrl, resolveExpressionTransform, resolveTransform, supabase } from "@/lib/supabase"
+import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, isCurrentUserAdmin, publicUrl, thumbnailUrl, resolveExpressionTransform, resolveTransform, supabase } from "@/lib/supabase"
 import { applyColors, fetchSvgText, isSvgPath, setSvgDimensions, svgToDataUrl, useAssetSrc } from "@/lib/svg"
 
 const CANVAS = 1000
@@ -142,7 +142,7 @@ export default function ClientPage() {
         setDefaultOutfits(defOutfits)
         rows.forEach((r) => {
           const img = new Image()
-          img.src = publicUrl(r.storage_path, r.storage_provider)
+          img.src = thumbnailUrl(r)
         })
         const b = builderInit?.builder
         if (b) {
@@ -580,7 +580,7 @@ export default function ClientPage() {
                         ) : (
                           <div className="relative flex flex-1 w-full items-center justify-center p-3">
                             <img
-                              src={publicUrl(a.storage_path, a.storage_provider)}
+                              src={thumbnailUrl(a)}
                               alt={label}
                               className="max-h-full max-w-full object-contain"
                             />

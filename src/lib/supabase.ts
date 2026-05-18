@@ -66,6 +66,7 @@ export interface Asset {
   skin_tone: SkinTone | null
   storage_path: string
   storage_provider: StorageProvider
+  thumbnail_path: string | null
   swatch_color: string | null
   display_order: number
   is_active: boolean
@@ -119,6 +120,14 @@ export function publicUrl(path: string, provider?: StorageProvider): string {
     return `${base}/${path}`
   }
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+}
+
+export function thumbnailUrl(asset: Asset): string {
+  if (asset.thumbnail_path && R2_PUBLIC_BASE_URL) {
+    const base = R2_PUBLIC_BASE_URL.replace(/\/$/, "")
+    return `${base}/${asset.thumbnail_path}`
+  }
+  return publicUrl(asset.storage_path, asset.storage_provider)
 }
 
 function r2FunctionUrl(action: string): string {
@@ -556,6 +565,50 @@ export async function countSupabaseAssets(): Promise<number> {
     .from("assets")
     .select("*", { count: "exact", head: true })
     .eq("storage_provider", "supabase")
+  if (error) throw error
+  return count ?? 0
+}
+
+export interface ThumbnailResult {
+  message: string
+  total: number
+  generated: number
+  errors: number
+  dry_run: boolean
+  results: { id: string; key: string; thumbnail_key: string; status: "generated" | "skipped" | "error"; error?: string }[]
+}
+
+export async function generateThumbnails(opts: {
+  dry_run?: boolean
+  batch_size?: number
+  width?: number
+  quality?: number
+} = {}): Promise<ThumbnailResult> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${url}/functions/v1/r2-thumbnails`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      dry_run: opts.dry_run ?? false,
+      batch_size: opts.batch_size ?? 50,
+      width: opts.width ?? 512,
+      quality: opts.quality ?? 80,
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || `Thumbnail generation failed (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function countMissingThumbnails(): Promise<number> {
+  const { count, error } = await supabase
+    .from("assets")
+    .select("*", { count: "exact", head: true })
+    .is("thumbnail_path", null)
+    .eq("storage_provider", "r2")
+    .not("storage_path", "ilike", "%.svg")
   if (error) throw error
   return count ?? 0
 }
