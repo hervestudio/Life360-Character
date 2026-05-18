@@ -578,6 +578,8 @@ export interface ThumbnailResult {
   results: { id: string; key: string; thumbnail_key: string; status: "generated" | "skipped" | "error"; error?: string }[]
 }
 
+const thumbnailWorkerUrl = import.meta.env.VITE_THUMBNAIL_WORKER_URL as string | undefined
+
 export async function generateThumbnails(opts: {
   dry_run?: boolean
   batch_size?: number
@@ -585,15 +587,35 @@ export async function generateThumbnails(opts: {
   quality?: number
 } = {}): Promise<ThumbnailResult> {
   const headers = await getAuthHeaders()
+  const payload = JSON.stringify({
+    dry_run: opts.dry_run ?? false,
+    batch_size: opts.batch_size ?? 20,
+    width: opts.width ?? 512,
+    quality: opts.quality ?? 80,
+  })
+
+  if (thumbnailWorkerUrl) {
+    try {
+      const res = await fetch(thumbnailWorkerUrl, {
+        method: "POST",
+        headers,
+        body: payload,
+      })
+      if (res.ok) return res.json()
+      const text = await res.text()
+      throw new Error(text || `Worker failed (${res.status})`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ""
+      if (!msg.includes("Failed to fetch") && !msg.includes("NetworkError")) {
+        throw err
+      }
+    }
+  }
+
   const res = await fetch(`${url}/functions/v1/r2-thumbnails`, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      dry_run: opts.dry_run ?? false,
-      batch_size: opts.batch_size ?? 3,
-      width: opts.width ?? 512,
-      quality: opts.quality ?? 80,
-    }),
+    body: payload,
   })
   if (!res.ok) {
     const text = await res.text()

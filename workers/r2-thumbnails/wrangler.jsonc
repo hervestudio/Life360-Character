@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "r2-thumbnails",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-01",
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "life-character-builder"
+    }
+  ],
+  "images": {
+    "binding": "IMAGES"
+  }
+}

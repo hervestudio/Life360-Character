@@ -1321,7 +1321,7 @@ function ThumbnailsView() {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [runningAll, setRunningAll] = useState(false)
-  const [batchSize, setBatchSize] = useState(3)
+  const [batchSize, setBatchSize] = useState(20)
   const [quality, setQuality] = useState(80)
   const [log, setLog] = useState<{ message: string; generated: number; errors: number; total: number }[]>([])
   const abortRef = useRef(false)
@@ -1448,9 +1448,9 @@ function ThumbnailsView() {
                   <Input
                     type="number"
                     min={1}
-                    max={5}
+                    max={50}
                     value={batchSize}
-                    onChange={(e) => setBatchSize(Math.min(5, Math.max(1, parseInt(e.target.value) || 3)))}
+                    onChange={(e) => setBatchSize(Math.min(50, Math.max(1, parseInt(e.target.value) || 20)))}
                     className="h-8 w-24 rounded-none text-xs"
                     disabled={running}
                   />
