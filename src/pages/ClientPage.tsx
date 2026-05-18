@@ -651,6 +651,7 @@ function HairThumb({
     setHairLoaded(false)
     setHairSize(null)
     const img = new Image()
+    img.crossOrigin = "anonymous"
     img.decoding = "async"
     img.onload = () => {
       setHairSize({ w: img.naturalWidth, h: img.naturalHeight })
@@ -766,6 +767,7 @@ function OverlayLayer({
   useEffect(() => {
     if (isSvg) { setSize({ w: CANVAS, h: CANVAS }); return }
     const img = new Image()
+    img.crossOrigin = "anonymous"
     img.onload = () => setSize({ w: img.naturalWidth, h: img.naturalHeight })
     img.src = rawUrl
   }, [rawUrl, isSvg])
