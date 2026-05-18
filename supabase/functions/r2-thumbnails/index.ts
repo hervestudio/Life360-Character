@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const dryRun = body.dry_run === true;
     const batchSize = Math.min(body.batch_size || 3, 5);
-    const width = body.width || 512;
+    const width = body.width || 2048;
     const quality = body.quality || 80;
 
     const { data: assets, error: fetchErr } = await supabase

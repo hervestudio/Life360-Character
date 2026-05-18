@@ -1342,7 +1342,7 @@ function ThumbnailsView() {
   async function runBatch(dryRun: boolean) {
     setRunning(true)
     try {
-      const result = await generateThumbnails({ dry_run: dryRun, batch_size: batchSize, width: 512, quality })
+      const result = await generateThumbnails({ dry_run: dryRun, batch_size: batchSize, width: 2048, quality })
       setLog((prev) => [{ message: result.message, generated: result.generated, errors: result.errors, total: result.total }, ...prev])
       if (!dryRun) {
         toast.success(result.message)
@@ -1376,7 +1376,7 @@ function ThumbnailsView() {
     while (!abortRef.current) {
       setRunning(true)
       try {
-        const result = await generateThumbnails({ dry_run: false, batch_size: batchSize, width: 512, quality })
+        const result = await generateThumbnails({ dry_run: false, batch_size: batchSize, width: 2048, quality })
         batchCount++
         totalGenerated += result.generated
         totalErrors += result.errors
@@ -1411,7 +1411,7 @@ function ThumbnailsView() {
         <div className="space-y-2">
           <h2 className="font-serif text-2xl font-light italic">Generate Thumbnails</h2>
           <p className="text-sm text-muted-foreground">
-            Create compressed 512px WebP thumbnails for PNG assets stored on R2. Thumbnails are used for faster previews in the character builder. Original files remain untouched for full-quality export.
+            Create compressed 2048px WebP thumbnails for PNG assets stored on R2. Thumbnails are used for faster previews in the character builder. Original files remain untouched for full-quality export.
           </p>
         </div>
 

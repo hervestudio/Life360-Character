@@ -76,7 +76,7 @@ export default {
       const body: RequestBody = await req.json().catch(() => ({}));
       const dryRun = body.dry_run === true;
       const batchSize = Math.min(body.batch_size || 20, 50);
-      const width = body.width || 512;
+      const width = body.width || 2048;
       const quality = body.quality || 80;
 
       const { data: assets, error: fetchErr } = await supabase
