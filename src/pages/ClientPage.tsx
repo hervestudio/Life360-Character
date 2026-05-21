@@ -273,7 +273,7 @@ export default function ClientPage() {
       let lastErr: unknown
       for (let i = 0; i < attempts; i++) {
         try {
-          const resp = await fetch(src)
+          const resp = await fetch(src, { cache: 'reload' })
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
           const blob = await resp.blob()
           const url = URL.createObjectURL(blob)
