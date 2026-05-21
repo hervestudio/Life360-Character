@@ -269,16 +269,28 @@ export default function ClientPage() {
   }
 
   async function exportPng() {
-    const load = async (src: string) => {
-      const resp = await fetch(src)
-      const blob = await resp.blob()
-      const url = URL.createObjectURL(blob)
-      return new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image()
-        img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")) }
-        img.src = url
-      })
+    const load = async (src: string, attempts = 3): Promise<HTMLImageElement> => {
+      let lastErr: unknown
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const resp = await fetch(src)
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+          const blob = await resp.blob()
+          const url = URL.createObjectURL(blob)
+          return await new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
+            img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")) }
+            img.src = url
+          })
+        } catch (e) {
+          lastErr = e
+          if (i < attempts - 1) {
+            await new Promise(r => setTimeout(r, 400 * (i + 1)))
+          }
+        }
+      }
+      throw lastErr instanceof Error ? lastErr : new Error("load failed")
     }
     const bodyImg = body ? await load(publicUrl(body.storage_path, body.storage_provider)).catch(() => null) : null
     const nativeSize = bodyImg ? Math.max(bodyImg.naturalWidth, bodyImg.naturalHeight) : CANVAS
