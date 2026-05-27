@@ -19,7 +19,11 @@ export function isSvgPath(path: string | null | undefined): boolean {
 export async function fetchSvgText(url: string): Promise<string> {
   let p = svgTextCache.get(url)
   if (!p) {
-    p = fetch(url).then((r) => r.text())
+    p = fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.text()
+    })
+    p.catch(() => { svgTextCache.delete(url) })
     svgTextCache.set(url, p)
   }
   return p

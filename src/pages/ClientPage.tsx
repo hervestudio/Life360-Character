@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AgeGroup, Asset, BodyDefaultOutfit, CategoryDefault, Gender, HeadExpressionColor, HeadExpressionDefault, LayerOrder, SkinTone, Transform } from "@/lib/supabase"
-import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, isCurrentUserAdmin, publicUrl, thumbnailUrl, resolveExpressionTransform, resolveTransform, supabase } from "@/lib/supabase"
+import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, isCurrentUserAdmin, publicUrl, supabaseStorageUrl, thumbnailUrl, resolveExpressionTransform, resolveTransform, supabase } from "@/lib/supabase"
 import { applyColors, fetchSvgText, isSvgPath, setSvgDimensions, svgToDataUrl, useAssetSrc } from "@/lib/svg"
 
 const CANVAS = 1000
@@ -292,7 +292,25 @@ export default function ClientPage() {
       }
       throw lastErr instanceof Error ? lastErr : new Error("load failed")
     }
-    const bodyImg = body ? await load(publicUrl(body.storage_path, body.storage_provider)).catch(() => null) : null
+    const loadWithFallback = async (asset: Asset): Promise<HTMLImageElement> => {
+      const primary = publicUrl(asset.storage_path, asset.storage_provider)
+      try {
+        return await load(primary)
+      } catch {
+        const fallback = supabaseStorageUrl(asset.storage_path)
+        return await load(fallback)
+      }
+    }
+    const fetchSvgWithFallback = async (asset: Asset): Promise<string> => {
+      const primary = publicUrl(asset.storage_path, asset.storage_provider)
+      try {
+        return await fetchSvgText(primary)
+      } catch {
+        const fallback = supabaseStorageUrl(asset.storage_path)
+        return await fetchSvgText(fallback)
+      }
+    }
+    const bodyImg = body ? await loadWithFallback(body).catch(() => null) : null
     const nativeSize = bodyImg ? Math.max(bodyImg.naturalWidth, bodyImg.naturalHeight) : CANVAS
     const size = Math.max(CANVAS, nativeSize)
     const canvas = document.createElement("canvas")
@@ -315,7 +333,7 @@ export default function ClientPage() {
         let layerSrc = publicUrl(l.asset.storage_path, l.asset.storage_provider)
         if (isSvgPath(l.asset.storage_path)) {
           try {
-            let text = await fetchSvgText(layerSrc)
+            let text = await fetchSvgWithFallback(l.asset)
             if (l.asset.category === "expression") {
               const override = hair ? headExprColors.find((c) => c.head_id === hair.id && c.expression_id === l.asset!.id)?.colors : null
               if (override && Object.keys(override).length > 0) {
@@ -326,7 +344,7 @@ export default function ClientPage() {
             layerSrc = svgToDataUrl(text)
           } catch {}
         }
-        const img = l.asset.id === body?.id && bodyImg ? bodyImg : await load(layerSrc)
+        const img = l.asset.id === body?.id && bodyImg ? bodyImg : await loadWithFallback(l.asset).catch(() => load(layerSrc))
         ctx.globalCompositeOperation = (l.blend && l.blend !== "normal" ? l.blend : "source-over") as GlobalCompositeOperation
         if (l.asset.category === "body" || l.asset.category === "outfit") {
           const scale = Math.min(size / img.naturalWidth, size / img.naturalHeight)

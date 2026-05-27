@@ -122,6 +122,10 @@ export function publicUrl(path: string, provider?: StorageProvider): string {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
 }
 
+export function supabaseStorageUrl(path: string): string {
+  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+}
+
 export function thumbnailUrl(asset: Asset): string {
   if (asset.thumbnail_path && R2_PUBLIC_BASE_URL) {
     const base = R2_PUBLIC_BASE_URL.replace(/\/$/, "")
