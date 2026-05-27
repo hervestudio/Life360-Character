@@ -334,12 +334,12 @@ export default function ClientPage() {
             let text = await fetchSvgWithFallback(l.asset)
             if (l.asset.category === "expression") {
               const override = hair ? headExprColors.find((c) => c.head_id === hair.id && c.expression_id === l.asset!.id)?.colors : null
-              console.log("EXPR colors override:", {
+              console.log("EXPR colors override:", JSON.stringify({
                 hairId: hair?.id,
                 expressionId: l.asset!.id,
                 headExprColorsCount: headExprColors.length,
                 override
-              })
+              }, null, 2))
               if (override && Object.keys(override).length > 0) {
                 text = applyColors(text, override)
               }
