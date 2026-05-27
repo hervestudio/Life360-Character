@@ -122,8 +122,8 @@ export function publicUrl(path: string, provider?: StorageProvider): string {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
 }
 
-export function supabaseStorageUrl(path: string): string {
-  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+export function r2ProxyUrl(path: string): string {
+  return `${url}/functions/v1/r2-storage?action=read&key=${encodeURIComponent(path)}`
 }
 
 export function thumbnailUrl(asset: Asset): string {

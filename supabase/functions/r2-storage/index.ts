@@ -55,6 +55,32 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const url = new URL(req.url);
+    const action = url.searchParams.get("action");
+
+    if (action === "read" && req.method === "GET") {
+      const key = url.searchParams.get("key");
+      if (!key) {
+        return errorResponse("Missing key parameter");
+      }
+      const r2 = getR2Client();
+      const endpoint = getR2Endpoint();
+      const getRes = await r2.fetch(`${endpoint}/${key}`, { method: "GET" });
+      if (!getRes.ok) {
+        return errorResponse(`R2 GET failed: ${getRes.status}`, 502);
+      }
+      const contentType = getRes.headers.get("Content-Type") || "application/octet-stream";
+      const body = await getRes.arrayBuffer();
+      return new Response(body, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=86400",
+        },
+      });
+    }
+
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader) {
       return errorResponse("Missing authorization", 401);
@@ -64,9 +90,6 @@ Deno.serve(async (req: Request) => {
     if (!admin) {
       return errorResponse("Forbidden: admin access required", 403);
     }
-
-    const url = new URL(req.url);
-    const action = url.searchParams.get("action");
 
     if (action === "upload" && req.method === "POST") {
       const formData = await req.formData();
@@ -123,7 +146,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return errorResponse(
-      "Invalid action. Use ?action=upload or ?action=delete",
+      "Invalid action. Use ?action=read, ?action=upload, or ?action=delete",
       400
     );
   } catch (err) {

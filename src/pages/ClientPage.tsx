@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AgeGroup, Asset, BodyDefaultOutfit, CategoryDefault, Gender, HeadExpressionColor, HeadExpressionDefault, LayerOrder, SkinTone, Transform } from "@/lib/supabase"
-import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, isCurrentUserAdmin, publicUrl, supabaseStorageUrl, thumbnailUrl, resolveExpressionTransform, resolveTransform, supabase } from "@/lib/supabase"
+import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, isCurrentUserAdmin, publicUrl, r2ProxyUrl, thumbnailUrl, resolveExpressionTransform, resolveTransform, supabase } from "@/lib/supabase"
 import { applyColors, fetchSvgText, isSvgPath, setSvgDimensions, svgToDataUrl, useAssetSrc } from "@/lib/svg"
 
 const CANVAS = 1000
@@ -297,8 +297,7 @@ export default function ClientPage() {
       try {
         return await load(primary)
       } catch {
-        const fallback = supabaseStorageUrl(asset.storage_path)
-        return await load(fallback)
+        return await load(r2ProxyUrl(asset.storage_path))
       }
     }
     const fetchSvgWithFallback = async (asset: Asset): Promise<string> => {
@@ -306,8 +305,7 @@ export default function ClientPage() {
       try {
         return await fetchSvgText(primary)
       } catch {
-        const fallback = supabaseStorageUrl(asset.storage_path)
-        return await fetchSvgText(fallback)
+        return await fetchSvgText(r2ProxyUrl(asset.storage_path))
       }
     }
     const bodyImg = body ? await loadWithFallback(body).catch(() => null) : null
