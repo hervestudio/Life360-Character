@@ -341,7 +341,14 @@ export default function ClientPage() {
                 override
               }, null, 2))
               if (override && Object.keys(override).length > 0) {
+                const before = text
                 text = applyColors(text, override)
+                console.log("APPLY result", {
+                  changed: before !== text,
+                  beforeLen: before.length,
+                  afterLen: text.length,
+                  after: text
+                })
               }
             }
             const vbMatch = text.match(/viewBox="([^"]+)"/)
