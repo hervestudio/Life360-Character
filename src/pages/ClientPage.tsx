@@ -338,8 +338,17 @@ export default function ClientPage() {
                 text = applyColors(text, override)
               }
             }
-            text = setSvgDimensions(text, size, size)
-            console.log("EXPORT SVG:", text.slice(0, 500))
+            const vbMatch = text.match(/viewBox="([^"]+)"/)
+            let svgRatio = 1
+            if (vbMatch) {
+              const parts = vbMatch[1].split(/[\s,]+/).map(parseFloat)
+              if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+                svgRatio = parts[2] / parts[3]
+              }
+            }
+            const svgW = svgRatio >= 1 ? size : Math.round(size * svgRatio)
+            const svgH = svgRatio >= 1 ? Math.round(size / svgRatio) : size
+            text = setSvgDimensions(text, svgW, svgH)
             layerSrc = svgToDataUrl(text)
           } catch {}
         }
@@ -355,8 +364,8 @@ export default function ClientPage() {
             ? resolveExpressionTransform(l.asset, hair?.id ?? null, body?.id ?? null, defaults, headExprDefaults)
             : resolveTransform(l.asset, body?.id ?? null, defaults)
           const isSvg = isSvgPath(l.asset.storage_path)
-          const baseW = isSvg ? size : img.naturalWidth
-          const baseH = isSvg ? size : img.naturalHeight
+          const baseW = img.naturalWidth
+          const baseH = img.naturalHeight
           const w = isSvg ? baseW * t.scale : baseW * t.scale * scaleFactor
           const h = isSvg ? baseH * t.scale : baseH * t.scale * scaleFactor
           const x = (size - w) / 2 + t.offset_x * scaleFactor
