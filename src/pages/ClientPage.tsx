@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AgeGroup, Asset, BodyDefaultOutfit, CategoryDefault, Gender, HeadExpressionColor, HeadExpressionDefault, LayerOrder, SkinTone, Transform } from "@/lib/supabase"
 import { DEFAULT_LAYER_ORDER, IDENTITY_TRANSFORM, SKIN_TONES, fetchAssets, fetchBodyDefaultOutfits, fetchCategoryDefaults, fetchHeadExpressionColors, fetchHeadExpressionDefaults, fetchLayerOrder, isCurrentUserAdmin, publicUrl, r2ProxyUrl, thumbnailUrl, resolveExpressionTransform, resolveTransform, supabase } from "@/lib/supabase"
-import { applyColors, fetchSvgText, isSvgPath, setSvgDimensions, svgToDataUrl, useAssetSrc } from "@/lib/svg"
+import { applyColors, fetchSvgText, getSvgViewBox, isSvgPath, setSvgDimensions, svgToDataUrl, useAssetSrc } from "@/lib/svg"
 
 const CANVAS = 1000
 
@@ -338,7 +338,15 @@ export default function ClientPage() {
                 text = applyColors(text, override)
               }
             }
-            text = setSvgDimensions(text, size, size)
+            const vb = getSvgViewBox(text)
+            if (vb) {
+              const ratio = vb.w / vb.h
+              const w = ratio >= 1 ? size : size * ratio
+              const h = ratio >= 1 ? size / ratio : size
+              text = setSvgDimensions(text, w, h)
+            } else {
+              text = setSvgDimensions(text, size, size)
+            }
             layerSrc = svgToDataUrl(text)
           } catch {}
         }

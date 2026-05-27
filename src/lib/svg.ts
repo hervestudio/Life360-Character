@@ -236,6 +236,23 @@ export function svgToDataUrl(text: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(text)}`
 }
 
+export function getSvgViewBox(text: string): { w: number; h: number } | null {
+  const doc = new DOMParser().parseFromString(text, "image/svg+xml")
+  const svg = doc.documentElement
+  if (!svg || svg.nodeName.toLowerCase() !== "svg") return null
+  const vb = svg.getAttribute("viewBox")
+  if (vb) {
+    const parts = vb.split(/[\s,]+/).map(parseFloat)
+    if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+      return { w: parts[2], h: parts[3] }
+    }
+  }
+  const w = parseFloat(svg.getAttribute("width") || "0")
+  const h = parseFloat(svg.getAttribute("height") || "0")
+  if (w > 0 && h > 0) return { w, h }
+  return null
+}
+
 export function setSvgDimensions(text: string, width: number, height: number): string {
   const doc = new DOMParser().parseFromString(text, "image/svg+xml")
   const svg = doc.documentElement
