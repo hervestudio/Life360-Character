@@ -236,6 +236,11 @@ export function setSvgDimensions(text: string, width: number, height: number): s
   const doc = new DOMParser().parseFromString(text, "image/svg+xml")
   const svg = doc.documentElement
   if (!svg || svg.nodeName.toLowerCase() !== "svg") return text
+  if (!svg.getAttribute("viewBox")) {
+    const origW = svg.getAttribute("width") || String(width)
+    const origH = svg.getAttribute("height") || String(height)
+    svg.setAttribute("viewBox", `0 0 ${parseFloat(origW)} ${parseFloat(origH)}`)
+  }
   svg.setAttribute("width", String(width))
   svg.setAttribute("height", String(height))
   return new XMLSerializer().serializeToString(doc)
