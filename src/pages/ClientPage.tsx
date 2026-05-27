@@ -349,6 +349,7 @@ export default function ClientPage() {
             const svgW = svgRatio >= 1 ? size : Math.round(size * svgRatio)
             const svgH = svgRatio >= 1 ? Math.round(size / svgRatio) : size
             text = setSvgDimensions(text, svgW, svgH)
+            console.log("EXPORT SVG:", text.slice(0, 500))
             layerSrc = svgToDataUrl(text)
           } catch {}
         }
@@ -370,6 +371,21 @@ export default function ClientPage() {
           const h = isSvg ? baseH * t.scale : baseH * t.scale * scaleFactor
           const x = (size - w) / 2 + t.offset_x * scaleFactor
           const y = (size - h) / 2 + t.offset_y * scaleFactor
+          if (l.asset.category === "expression") {
+            console.log("EXPR draw", {
+              natW: img.naturalWidth,
+              natH: img.naturalHeight,
+              w,
+              h,
+              x,
+              y,
+              scale: t.scale,
+              ox: t.offset_x,
+              oy: t.offset_y,
+              size,
+              scaleFactor,
+            })
+          }
           ctx.drawImage(img, x, y, w, h)
         }
       } catch (e) {
