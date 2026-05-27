@@ -339,6 +339,7 @@ export default function ClientPage() {
               }
             }
             text = setSvgDimensions(text, size, size)
+            console.log("EXPORT SVG:", text.slice(0, 500))
             layerSrc = svgToDataUrl(text)
           } catch {}
         }
