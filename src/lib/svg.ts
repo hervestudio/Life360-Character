@@ -182,13 +182,6 @@ export function applyColors(text: string, colors: Record<string, string>): strin
       const eff = effectiveColor(el, classMap)
       if (!eff) return
       const normalized = normalizeColor(eff.color)
-      if (synthetic.length > 0) {
-        console.log("APPLY trying", {
-          elNormalizedColor: normalized,
-          elSource: eff.source,
-          syntheticTargets: synthetic.map(s => ({ source: s.source, color: s.color }))
-        })
-      }
       for (const s of synthetic) {
         if (s.source === eff.source && normalized === s.color) {
           el.setAttribute(s.source, s.target)

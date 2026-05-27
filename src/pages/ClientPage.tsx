@@ -334,21 +334,8 @@ export default function ClientPage() {
             let text = await fetchSvgWithFallback(l.asset)
             if (l.asset.category === "expression") {
               const override = hair ? headExprColors.find((c) => c.head_id === hair.id && c.expression_id === l.asset!.id)?.colors : null
-              console.log("EXPR colors override:", JSON.stringify({
-                hairId: hair?.id,
-                expressionId: l.asset!.id,
-                headExprColorsCount: headExprColors.length,
-                override
-              }, null, 2))
               if (override && Object.keys(override).length > 0) {
-                const before = text
                 text = applyColors(text, override)
-                console.log("APPLY result", {
-                  changed: before !== text,
-                  beforeLen: before.length,
-                  afterLen: text.length,
-                  after: text
-                })
               }
             }
             const vbMatch = text.match(/viewBox="([^"]+)"/)
@@ -362,11 +349,15 @@ export default function ClientPage() {
             const svgW = svgRatio >= 1 ? size : Math.round(size * svgRatio)
             const svgH = svgRatio >= 1 ? Math.round(size / svgRatio) : size
             text = setSvgDimensions(text, svgW, svgH)
-            console.log("EXPORT SVG full:", text)
             layerSrc = svgToDataUrl(text)
           } catch {}
         }
-        const img = l.asset.id === body?.id && bodyImg ? bodyImg : await loadWithFallback(l.asset).catch(() => load(layerSrc))
+        const isSvgAsset = isSvgPath(l.asset.storage_path)
+        const img = l.asset.id === body?.id && bodyImg
+          ? bodyImg
+          : isSvgAsset
+            ? await load(layerSrc)
+            : await loadWithFallback(l.asset).catch(() => load(layerSrc))
         ctx.globalCompositeOperation = (l.blend && l.blend !== "normal" ? l.blend : "source-over") as GlobalCompositeOperation
         if (l.asset.category === "body" || l.asset.category === "outfit") {
           const scale = Math.min(size / img.naturalWidth, size / img.naturalHeight)
@@ -387,21 +378,6 @@ export default function ClientPage() {
           const h = isSvg ? (w / svgRatio) : baseH * t.scale * scaleFactor
           const x = (size - w) / 2 + t.offset_x * scaleFactor
           const y = (size - h) / 2 + t.offset_y * scaleFactor
-          if (l.asset.category === "expression") {
-            console.log("EXPR draw", {
-              natW: img.naturalWidth,
-              natH: img.naturalHeight,
-              w,
-              h,
-              x,
-              y,
-              scale: t.scale,
-              ox: t.offset_x,
-              oy: t.offset_y,
-              size,
-              scaleFactor,
-            })
-          }
           ctx.drawImage(img, x, y, w, h)
         }
       } catch (e) {
