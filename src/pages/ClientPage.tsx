@@ -362,7 +362,7 @@ export default function ClientPage() {
             const svgW = svgRatio >= 1 ? size : Math.round(size * svgRatio)
             const svgH = svgRatio >= 1 ? Math.round(size / svgRatio) : size
             text = setSvgDimensions(text, svgW, svgH)
-            console.log("EXPORT SVG:", text.slice(0, 500))
+            console.log("EXPORT SVG full:", text)
             layerSrc = svgToDataUrl(text)
           } catch {}
         }
