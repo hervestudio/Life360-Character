@@ -67,6 +67,8 @@ export interface Asset {
   storage_path: string
   storage_provider: StorageProvider
   thumbnail_path: string | null
+  width: number | null
+  height: number | null
   swatch_color: string | null
   display_order: number
   is_active: boolean

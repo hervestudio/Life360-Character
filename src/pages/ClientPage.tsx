@@ -140,10 +140,9 @@ export default function ClientPage() {
         setHeadExprDefaults(hexpr)
         setHeadExprColors(hcolors)
         setDefaultOutfits(defOutfits)
-        rows.forEach((r) => {
-          const img = new Image()
-          img.src = thumbnailUrl(r)
-        })
+        // Thumbnails load lazily per visible tile (see grid <img loading="lazy">).
+        // A blanket preload of all ~130 thumbnails here used to fetch several MB
+        // upfront and starve the visible body/hair images of bandwidth.
         const b = builderInit?.builder
         if (b) {
           setTab(b.category)
@@ -633,6 +632,8 @@ export default function ClientPage() {
                             <img
                               src={thumbnailUrl(a)}
                               alt={label}
+                              loading="lazy"
+                              decoding="async"
                               className="max-h-full max-w-full object-contain"
                             />
                           </div>
@@ -684,10 +685,11 @@ function HairThumb({
 }) {
   const bodyThumb = thumbnailUrl(body)
   const hairThumb = thumbnailUrl(hair)
-  const hairFullSrc = publicUrl(hair.storage_path, hair.storage_provider)
+  const storedHairW = hair.width ?? null
+  const storedHairH = hair.height ?? null
   const [bodyLoaded, setBodyLoaded] = useState(false)
   const [hairLoaded, setHairLoaded] = useState(false)
-  const [hairSize, setHairSize] = useState<{ w: number; h: number } | null>(null)
+  const [measuredHair, setMeasuredHair] = useState<{ w: number; h: number } | null>(null)
 
   useEffect(() => {
     setBodyLoaded(false)
@@ -700,20 +702,22 @@ function HairThumb({
 
   useEffect(() => {
     setHairLoaded(false)
-    setHairSize(null)
+    setMeasuredHair(null)
     const img = new Image()
     img.decoding = "async"
-    img.onload = () => {
-      setHairSize({ w: img.naturalWidth, h: img.naturalHeight })
+    const done = () => {
+      // Size from the stored intrinsic dimensions; only measure (the thumbnail
+      // we're already displaying) when dims are absent — so we never download the
+      // full-resolution image just to read its size.
+      if (!(storedHairW && storedHairH)) setMeasuredHair({ w: img.naturalWidth, h: img.naturalHeight })
       setHairLoaded(true)
     }
-    img.src = hairFullSrc
-    if (img.complete && img.naturalWidth > 0) {
-      setHairSize({ w: img.naturalWidth, h: img.naturalHeight })
-      setHairLoaded(true)
-    }
-  }, [hairFullSrc])
+    img.onload = done
+    img.src = hairThumb
+    if (img.complete && img.naturalWidth > 0) done()
+  }, [hairThumb, storedHairW, storedHairH])
 
+  const hairSize = storedHairW && storedHairH ? { w: storedHairW, h: storedHairH } : measuredHair
   const ready = bodyLoaded && hairLoaded && hairSize
   const t = resolveTransform(hair, body.id, defaults) ?? IDENTITY_TRANSFORM
   const ncx = 0.5 + t.offset_x / CANVAS
@@ -809,17 +813,24 @@ function OverlayLayer({
   transformOverride?: Transform
   colors?: Record<string, string> | null
 }) {
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
+  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null)
   const rawUrl = publicUrl(asset.storage_path, asset.storage_provider)
   const isSvg = isSvgPath(asset.storage_path)
   const resolvedSrc = useAssetSrc(isSvg ? rawUrl : null, colors ?? null)
   const displaySrc = isSvg ? (resolvedSrc ?? rawUrl) : thumbnailUrl(asset)
+  // Size from the stored intrinsic dimensions so we never download the full-res
+  // image just to measure it; fall back to measuring the thumbnail if absent.
   useEffect(() => {
-    if (isSvg) { setSize({ w: CANVAS, h: CANVAS }); return }
+    if (isSvg || (asset.width && asset.height)) return
     const img = new Image()
-    img.onload = () => setSize({ w: img.naturalWidth, h: img.naturalHeight })
-    img.src = rawUrl
-  }, [rawUrl, isSvg])
+    img.onload = () => setMeasured({ w: img.naturalWidth, h: img.naturalHeight })
+    img.src = thumbnailUrl(asset)
+  }, [asset.storage_path, asset.width, asset.height, isSvg])
+  const size = isSvg
+    ? { w: CANVAS, h: CANVAS }
+    : asset.width && asset.height
+      ? { w: asset.width, h: asset.height }
+      : measured
   if (!size) return null
   const t: Transform = transformOverride ?? resolveTransform(asset, bodyId, defaults)
   const wPct = ((size.w * t.scale) / CANVAS) * 100
