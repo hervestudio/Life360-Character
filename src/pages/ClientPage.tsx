@@ -166,13 +166,15 @@ export default function ClientPage() {
             const def = defOutfits.find((d) => d.body_id === seed.id)
             const outfits = rows.filter((a) => a.category === "outfit" && a.parent_body_id === seed.id)
             const initialOutfit = def && outfits.find((o) => o.id === def.outfit_id) ? def.outfit_id : null
+            // Default to the first expression ("Expression 01") so the character starts expressive.
+            const firstExpression = rows.filter((a) => a.category === "expression")[0]?.id ?? null
             setSel({
               age: seed.age,
               gender: seed.gender,
               skin_tone: seed.skin_tone,
               hair_id: heads.length ? heads[Math.floor(Math.random() * heads.length)].id : null,
               accessory_id: accs.length ? accs[Math.floor(Math.random() * accs.length)].id : null,
-              expression_id: null,
+              expression_id: firstExpression,
               outfit_id: initialOutfit,
             })
           }
@@ -263,7 +265,7 @@ export default function ClientPage() {
       skin_tone: tone,
       hair_id: heads.length ? randomPick(heads)!.id : null,
       accessory_id: grouped.accessory.length ? randomPick(grouped.accessory)!.id : null,
-      expression_id: null,
+      expression_id: grouped.expression[0]?.id ?? null, // keep Expression 01 active
       outfit_id: outfitPick,
     })
   }
