@@ -447,7 +447,7 @@ export default function ClientPage() {
 
   return (
     <div
-      className="dark relative h-svh overflow-hidden bg-background text-foreground"
+      className="dark relative min-h-svh overflow-y-auto lg:h-svh lg:overflow-hidden bg-background text-foreground"
       style={{
         backgroundColor: "#161616",
         backgroundImage:
@@ -455,7 +455,7 @@ export default function ClientPage() {
         backgroundSize: "24px 24px",
       }}
     >
-      <div className="mx-auto flex h-svh w-full max-w-[1920px] flex-col px-4 py-4 sm:px-6 lg:px-10 lg:py-6 2xl:px-16">
+      <div className="mx-auto flex min-h-svh w-full max-w-[1920px] flex-col px-4 py-4 sm:px-6 lg:h-svh lg:px-10 lg:py-6 2xl:px-16">
         <header className="flex shrink-0 items-center justify-between pb-4">
           <Link to="/" className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full text-primary">
@@ -470,9 +470,9 @@ export default function ClientPage() {
           </Button>
         </header>
 
-        <main className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[240px_1fr_320px] xl:grid-cols-[260px_1fr_360px] 2xl:grid-cols-[300px_1fr_420px] 2xl:gap-8">
-          <aside className="relative z-10 flex min-h-0 flex-col gap-4">
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-3xl bg-white/[0.03] p-6">
+        <main className="grid gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[240px_1fr_320px] xl:grid-cols-[260px_1fr_360px] 2xl:grid-cols-[300px_1fr_420px] 2xl:gap-8">
+          <aside className="relative z-10 flex flex-col gap-4 lg:min-h-0">
+            <div className="rounded-3xl bg-white/[0.03] p-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
               <SectionTitle>Gender</SectionTitle>
               <div className="space-y-1">
                 {GENDERS.map((g) => (
@@ -564,8 +564,8 @@ export default function ClientPage() {
             </div>
           </aside>
 
-          <section className="relative flex min-h-0 items-center justify-center">
-            <div className="relative z-0 aspect-square h-full max-h-full -mx-[130px] self-center">
+          <section className="relative flex items-center justify-center lg:min-h-0">
+            <div className="relative z-0 aspect-square w-[78%] max-w-[360px] self-center lg:h-full lg:max-h-full lg:w-auto lg:max-w-none lg:-mx-[130px]">
               {loading ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading</div>
               ) : !body ? (
@@ -597,7 +597,7 @@ export default function ClientPage() {
             </div>
           </section>
 
-          <aside className="relative z-10 flex min-h-0 flex-col rounded-3xl bg-white/[0.03] p-5">
+          <aside className="relative z-10 flex flex-col rounded-3xl bg-white/[0.03] p-5 lg:min-h-0">
             <CategoryTabBar
               tabs={[
                 { key: "hair" as const, label: "Hair Style" },
@@ -609,7 +609,7 @@ export default function ClientPage() {
               onSelect={(k) => setTab(k)}
             />
 
-            <ScrollArea className="-mx-2 flex-1 pr-2">
+            <ScrollArea className="-mx-2 pr-2 lg:flex-1">
               <div className="grid grid-cols-2 gap-3 px-2 pb-2">
                 {tiles.length === 0 ? (
                   <p className="col-span-2 py-6 text-center text-sm text-muted-foreground">
@@ -670,18 +670,6 @@ export default function ClientPage() {
                 )}
               </div>
             </ScrollArea>
-
-            <div className="mt-4 flex items-center justify-center gap-1.5">
-              {(availableOutfits.length > 0
-                ? (["hair", "outfit", "accessory", "expression"] as const)
-                : (["hair", "accessory", "expression"] as const)
-              ).map((k) => (
-                <span
-                  key={k}
-                  className={`h-1.5 w-1.5 rounded-full ${tab === k ? "bg-primary" : "bg-muted-foreground/30"}`}
-                />
-              ))}
-            </div>
           </aside>
         </main>
       </div>
