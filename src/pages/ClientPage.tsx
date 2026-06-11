@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, Download, Lock, Pencil, Shuffle } from "lucide-react"
+import { ChevronLeft, ChevronRight, Download, Loader2, Lock, Pencil, Shuffle } from "lucide-react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -104,6 +104,7 @@ export default function ClientPage() {
   const [headExprColors, setHeadExprColors] = useState<HeadExpressionColor[]>([])
   const [, setDefaultOutfits] = useState<BodyDefaultOutfit[]>([])
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
   const [tab, setTab] = useState<"hair" | "outfit" | "accessory" | "expression">("hair")
   const [sel, setSel] = useState<Selection>({
     age: "adult",
@@ -268,6 +269,9 @@ export default function ClientPage() {
   }
 
   async function exportPng() {
+    if (exporting) return
+    setExporting(true)
+    try {
     const load = async (src: string, attempts = 3): Promise<HTMLImageElement> => {
       let lastErr: unknown
       for (let i = 0; i < attempts; i++) {
@@ -400,15 +404,22 @@ export default function ClientPage() {
       .map(slug)
       .filter(Boolean)
     const filename = parts.length ? `character-${parts.join("_")}.png` : "character.png"
-    canvas.toBlob((blob) => {
-      if (!blob) return
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
-    }, "image/png")
+    await new Promise<void>((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement("a")
+          a.href = url
+          a.download = filename
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+        resolve()
+      }, "image/png")
+    })
+    } finally {
+      setExporting(false)
+    }
   }
 
   const DEFAULT_OUTFIT_ID = "__default_outfit__"
@@ -512,9 +523,14 @@ export default function ClientPage() {
               </button>
               <button
                 onClick={exportPng}
-                className="flex w-full items-center gap-3 rounded-2xl bg-white/[0.03] px-5 py-3.5 text-sm font-medium transition hover:bg-white/[0.06]"
+                disabled={exporting}
+                className="flex w-full items-center gap-3 rounded-2xl bg-white/[0.03] px-5 py-3.5 text-sm font-medium transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-white/[0.03]"
               >
-                <Download className="h-4 w-4" /> Export PNG
+                {exporting ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Exporting…</>
+                ) : (
+                  <><Download className="h-4 w-4" /> Export PNG</>
+                )}
               </button>
               {isAdmin && (
                 <button
