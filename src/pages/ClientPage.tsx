@@ -650,6 +650,7 @@ export default function ClientPage() {
                               alt={label}
                               loading="lazy"
                               decoding="async"
+                              fetchPriority="low"
                               className="max-h-full max-w-full object-contain"
                             />
                           </div>
@@ -711,6 +712,7 @@ function HairThumb({
     setBodyLoaded(false)
     const img = new Image()
     img.decoding = "async"
+    img.fetchPriority = "low" // picker tiles yield to the on-canvas character
     img.onload = () => setBodyLoaded(true)
     img.src = bodyThumb
     if (img.complete && img.naturalWidth > 0) setBodyLoaded(true)
@@ -721,6 +723,7 @@ function HairThumb({
     setMeasuredHair(null)
     const img = new Image()
     img.decoding = "async"
+    img.fetchPriority = "low"
     const done = () => {
       // Size from the stored intrinsic dimensions; only measure (the thumbnail
       // we're already displaying) when dims are absent — so we never download the
@@ -767,6 +770,7 @@ function HairThumb({
           alt=""
           loading="eager"
           decoding="async"
+          fetchPriority="low"
           style={{ zIndex: bodyZ }}
           className="pointer-events-none absolute inset-0 h-full w-full object-contain"
         />
@@ -776,6 +780,7 @@ function HairThumb({
             alt=""
             loading="eager"
             decoding="async"
+            fetchPriority="low"
             style={{
               zIndex: hairZ,
               position: "absolute",
@@ -806,6 +811,8 @@ function BodyLayer({ src, z }: { src: string; z: number }) {
     <img
       src={src}
       alt=""
+      loading="eager"
+      fetchPriority="high"
       style={{ zIndex: z }}
       className="pointer-events-none absolute inset-0 h-full w-full object-contain"
     />
@@ -857,6 +864,8 @@ function OverlayLayer({
     <img
       src={displaySrc}
       alt=""
+      loading="eager"
+      fetchPriority="high"
       style={{
         zIndex: z,
         mixBlendMode: blend as any,
