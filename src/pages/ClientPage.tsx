@@ -836,25 +836,28 @@ function OverlayLayer({
   transformOverride?: Transform
   colors?: Record<string, string> | null
 }) {
-  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null)
   const rawUrl = publicUrl(asset.storage_path, asset.storage_provider)
   const isSvg = isSvgPath(asset.storage_path)
   const resolvedSrc = useAssetSrc(isSvg ? rawUrl : null, colors ?? null)
-  const displaySrc = isSvg ? (resolvedSrc ?? rawUrl) : thumbnailUrl(asset)
-  // Size from the stored intrinsic dimensions so we never download the full-res
-  // image just to measure it; fall back to measuring the thumbnail if absent.
+  const targetSrc = isSvg ? (resolvedSrc ?? rawUrl) : thumbnailUrl(asset)
+  // Commit the new image and its dimensions TOGETHER, only once the new image has
+  // decoded. This keeps the previous layer painted at its own (correct) size until
+  // the replacement is ready — instead of briefly stretching the still-loading new
+  // src to the next layer's dimensions, which looked like a momentarily deformed head.
+  const [shown, setShown] = useState<{ src: string; size: { w: number; h: number } } | null>(null)
   useEffect(() => {
-    if (isSvg || (asset.width && asset.height)) return
+    if (isSvg) { setShown({ src: targetSrc, size: { w: CANVAS, h: CANVAS } }); return }
+    let cancelled = false
+    const commit = (w: number, h: number) => { if (!cancelled) setShown({ src: targetSrc, size: { w, h } }) }
     const img = new Image()
-    img.onload = () => setMeasured({ w: img.naturalWidth, h: img.naturalHeight })
-    img.src = thumbnailUrl(asset)
-  }, [asset.storage_path, asset.width, asset.height, isSvg])
-  const size = isSvg
-    ? { w: CANVAS, h: CANVAS }
-    : asset.width && asset.height
-      ? { w: asset.width, h: asset.height }
-      : measured
-  if (!size) return null
+    img.decoding = "async"
+    img.onload = () => commit(asset.width || img.naturalWidth, asset.height || img.naturalHeight)
+    img.src = targetSrc
+    if (img.complete && img.naturalWidth > 0) commit(asset.width || img.naturalWidth, asset.height || img.naturalHeight)
+    return () => { cancelled = true }
+  }, [targetSrc, isSvg, asset.width, asset.height])
+  if (!shown) return null
+  const size = shown.size
   const t: Transform = transformOverride ?? resolveTransform(asset, bodyId, defaults)
   const wPct = ((size.w * t.scale) / CANVAS) * 100
   const hPct = ((size.h * t.scale) / CANVAS) * 100
@@ -862,7 +865,7 @@ function OverlayLayer({
   const topPct = (((CANVAS - size.h * t.scale) / 2 + t.offset_y) / CANVAS) * 100
   return (
     <img
-      src={displaySrc}
+      src={shown.src}
       alt=""
       loading="eager"
       fetchPriority="high"
