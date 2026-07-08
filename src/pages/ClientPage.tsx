@@ -39,6 +39,15 @@ interface Selection {
   outfit_id: string | null
 }
 
+interface LibConfig {
+  ages: AgeGroup[]
+  genders: Gender[]
+  skins: SkinTone[]
+  outfitsMode: "default" | "all"
+  exprIds: (string | null)[] // null = "no expression"; string = expression asset id
+  size: number
+}
+
 function Life360Logo({ className }: { className?: string }) {
   return <img src="/Purple.svg" alt="Life 360" className={className} />
 }
@@ -107,6 +116,7 @@ export default function ClientPage() {
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [libProgress, setLibProgress] = useState<{ done: number; total: number; phase: "render" | "zip" } | null>(null)
+  const [showLibConfig, setShowLibConfig] = useState(false)
   const libCancel = useRef(false)
   const [tab, setTab] = useState<"hair" | "outfit" | "accessory" | "expression">("hair")
   const [sel, setSel] = useState<Selection>({
@@ -429,28 +439,32 @@ export default function ClientPage() {
 
   // Export EVERY combination (body × hair × outfit-option × expression-option) as a ZIP.
   // Composited at 2048px from the display thumbnails, matching what's on screen.
-  async function exportLibrary() {
+  async function exportLibrary(cfg: LibConfig) {
     if (libProgress) return
-    const SIZE = 2048
+    const SIZE = cfg.size
     const slug = (v: string | null | undefined) => (v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
     const baseName = (a: Asset | null) => (a ? (a.storage_path.split("/").pop() || "").replace(/\.[^.]+$/, "") : "")
+    const inCfg = (b: Asset) => cfg.ages.includes(b.age as AgeGroup) && cfg.genders.includes(b.gender as Gender) && cfg.skins.includes(b.skin_tone as SkinTone)
+    const exprAssets: (Asset | null)[] = cfg.exprIds
+      .map((id) => (id === null ? null : grouped.expression.find((e) => e.id === id) ?? undefined))
+      .filter((x) => x !== undefined) as (Asset | null)[]
+    const outfitOptsFor = (b: Asset): (Asset | null)[] =>
+      cfg.outfitsMode === "default" ? [null] : [null, ...grouped.outfit.filter((o) => o.parent_body_id === b.id)]
 
     type Combo = { body: Asset; hair: Asset | null; outfit: Asset | null; expression: Asset | null }
     const combos: Combo[] = []
     for (const b of grouped.body) {
+      if (!inCfg(b)) continue
       const bodyHairs = grouped.hair.filter((h) => h.age === b.age && h.gender === b.gender && h.skin_tone === b.skin_tone)
-      const bodyOutfits = grouped.outfit.filter((o) => o.parent_body_id === b.id)
       const hairOpts: (Asset | null)[] = bodyHairs.length ? bodyHairs : [null]
-      const outfitOpts: (Asset | null)[] = [null, ...bodyOutfits]
-      const exprOpts: (Asset | null)[] = [null, ...grouped.expression]
       for (const hair of hairOpts)
-        for (const outfit of outfitOpts)
-          for (const expression of exprOpts)
+        for (const outfit of outfitOptsFor(b))
+          for (const expression of exprAssets)
             combos.push({ body: b, hair, outfit, expression })
     }
-    if (!combos.length) { toast.error("No assets to export."); return }
-    if (!window.confirm(`Generate the full library — ${combos.length} images at ${SIZE}px.\n\nThis can take a few minutes and produce a large ZIP (hundreds of MB). Keep this tab focused and don't close it while it runs.`)) return
+    if (!combos.length) { toast.error("Nothing selected to export."); return }
 
+    setShowLibConfig(false)
     libCancel.current = false
     setLibProgress({ done: 0, total: combos.length, phase: "render" })
 
@@ -495,9 +509,10 @@ export default function ClientPage() {
 
     try {
       for (const b of grouped.body) {
+        if (!inCfg(b)) continue
         if (libCancel.current) { setLibProgress(null); return }
         const bodyImg = await decode(b)
-        const bodyOutfits = grouped.outfit.filter((o) => o.parent_body_id === b.id)
+        const bodyOutfits = cfg.outfitsMode === "all" ? grouped.outfit.filter((o) => o.parent_body_id === b.id) : []
         const outfitImgs = new Map<string, HTMLImageElement | null>()
         for (const o of bodyOutfits) outfitImgs.set(o.id, await decode(o))
         const bodyHairs = grouped.hair.filter((h) => h.age === b.age && h.gender === b.gender && h.skin_tone === b.skin_tone)
@@ -506,8 +521,8 @@ export default function ClientPage() {
         for (const hair of hairOpts) {
           if (libCancel.current) { setLibProgress(null); return }
           const hairImg = await decode(hair)
-          for (const outfit of [null, ...bodyOutfits] as (Asset | null)[]) {
-            for (const expression of [null, ...grouped.expression] as (Asset | null)[]) {
+          for (const outfit of outfitOptsFor(b)) {
+            for (const expression of exprAssets) {
               ctx.clearRect(0, 0, SIZE, SIZE)
               const base = outfit ?? b
               const baseImg = outfit ? outfitImgs.get(outfit.id) ?? null : bodyImg
@@ -716,7 +731,7 @@ export default function ClientPage() {
               )}
               {isAdmin && (
                 <button
-                  onClick={exportLibrary}
+                  onClick={() => setShowLibConfig(true)}
                   disabled={!!libProgress}
                   className="flex w-full items-center gap-3 rounded-2xl bg-white/[0.03] px-5 py-3.5 text-sm font-medium transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-white/[0.03]"
                 >
@@ -836,6 +851,17 @@ export default function ClientPage() {
         </main>
       </div>
 
+      {showLibConfig && !libProgress && (
+        <LibraryConfigDialog
+          bodies={grouped.body}
+          hairs={grouped.hair}
+          outfits={grouped.outfit}
+          expressions={grouped.expression}
+          onClose={() => setShowLibConfig(false)}
+          onStart={exportLibrary}
+        />
+      )}
+
       {libProgress && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl bg-secondary p-6 text-center shadow-xl">
@@ -865,6 +891,125 @@ export default function ClientPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function LibraryConfigDialog({
+  bodies,
+  hairs,
+  outfits,
+  expressions,
+  onClose,
+  onStart,
+}: {
+  bodies: Asset[]
+  hairs: Asset[]
+  outfits: Asset[]
+  expressions: Asset[]
+  onClose: () => void
+  onStart: (cfg: LibConfig) => void
+}) {
+  const [ages, setAges] = useState<AgeGroup[]>(AGES.map((a) => a.key))
+  const [genders, setGenders] = useState<Gender[]>(GENDERS.map((g) => g.key))
+  const [skins, setSkins] = useState<SkinTone[]>(SKIN_TONES.map((s) => s.key))
+  const [outfitsMode, setOutfitsMode] = useState<"default" | "all">("all")
+  const [exprIds, setExprIds] = useState<(string | null)[]>([null, ...expressions.map((e) => e.id)])
+  const [size, setSize] = useState(2048)
+  const hasOutfits = outfits.length > 0
+
+  function toggle<T>(arr: T[], v: T): T[] {
+    return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]
+  }
+
+  const count = useMemo(() => {
+    const bs = bodies.filter((b) => ages.includes(b.age as AgeGroup) && genders.includes(b.gender as Gender) && skins.includes(b.skin_tone as SkinTone))
+    let n = 0
+    for (const b of bs) {
+      const hc = Math.max(hairs.filter((h) => h.age === b.age && h.gender === b.gender && h.skin_tone === b.skin_tone).length, 1)
+      const oc = outfitsMode === "default" ? 1 : 1 + outfits.filter((o) => o.parent_body_id === b.id).length
+      n += hc * oc * exprIds.length
+    }
+    return n
+  }, [ages, genders, skins, outfitsMode, exprIds, bodies, hairs, outfits])
+
+  const perImgMB = size === 2048 ? 1.0 : size === 1024 ? 0.25 : 0.06
+  const estMB = Math.max(1, Math.round(count * perImgMB))
+  const canStart = count > 0 && exprIds.length > 0
+
+  const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+    <button
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${active ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground hover:text-foreground"}`}
+    >
+      {children}
+    </button>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" onClick={onClose}>
+      <div className="max-h-[85svh] w-full max-w-md overflow-y-auto rounded-3xl bg-secondary p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold tracking-tight">Download Library</h3>
+        <p className="mt-1 text-sm text-muted-foreground">Every hairstyle is always included for the selected characters — pick the rest below.</p>
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Characters</p>
+          <div className="flex flex-wrap gap-1.5">
+            {GENDERS.map((g) => <Chip key={g.key} active={genders.includes(g.key)} onClick={() => setGenders(toggle(genders, g.key))}>{g.label}</Chip>)}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {AGES.map((a) => <Chip key={a.key} active={ages.includes(a.key)} onClick={() => setAges(toggle(ages, a.key))}>{a.label}</Chip>)}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {SKIN_TONES.map((s) => <Chip key={s.key} active={skins.includes(s.key)} onClick={() => setSkins(toggle(skins, s.key))}>{s.label}</Chip>)}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Expressions</p>
+          <div className="flex flex-wrap gap-1.5">
+            <Chip active={exprIds.includes(null)} onClick={() => setExprIds(toggle(exprIds, null))}>No expression</Chip>
+            {expressions.map((e, i) => (
+              <Chip key={e.id} active={exprIds.includes(e.id)} onClick={() => setExprIds(toggle(exprIds, e.id))}>{`Expression ${String(i + 1).padStart(2, "0")}`}</Chip>
+            ))}
+          </div>
+        </div>
+
+        {hasOutfits && (
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Outfits</p>
+            <div className="flex flex-wrap gap-1.5">
+              <Chip active={outfitsMode === "default"} onClick={() => setOutfitsMode("default")}>Default only</Chip>
+              <Chip active={outfitsMode === "all"} onClick={() => setOutfitsMode("all")}>All variations</Chip>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resolution</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[512, 1024, 2048].map((s) => <Chip key={s} active={size === s} onClick={() => setSize(s)}>{s}px</Chip>)}
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl bg-white/[0.03] p-3 text-center text-sm">
+          {canStart ? (
+            <span><span className="font-semibold text-foreground">{count.toLocaleString()}</span> images · ~{estMB} MB ZIP</span>
+          ) : (
+            <span className="text-muted-foreground">Nothing selected</span>
+          )}
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-white/[0.03] py-2.5 text-sm font-medium transition hover:bg-white/[0.06]">Cancel</button>
+          <button
+            disabled={!canStart}
+            onClick={() => onStart({ ages, genders, skins, outfitsMode, exprIds, size })}
+            className="flex-1 rounded-2xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Download
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
