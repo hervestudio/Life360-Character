@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, Download, Loader2, Lock, Pencil, Shuffle } from "lucide-react"
+import JSZip from "jszip"
+import { ChevronLeft, ChevronRight, Download, FolderArchive, Loader2, Lock, Pencil, Shuffle } from "lucide-react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -105,6 +106,8 @@ export default function ClientPage() {
   const [, setDefaultOutfits] = useState<BodyDefaultOutfit[]>([])
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [libProgress, setLibProgress] = useState<{ done: number; total: number; phase: "render" | "zip" } | null>(null)
+  const libCancel = useRef(false)
   const [tab, setTab] = useState<"hair" | "outfit" | "accessory" | "expression">("hair")
   const [sel, setSel] = useState<Selection>({
     age: "adult",
@@ -424,6 +427,156 @@ export default function ClientPage() {
     }
   }
 
+  // Export EVERY combination (body × hair × outfit-option × expression-option) as a ZIP.
+  // Composited at 2048px from the display thumbnails, matching what's on screen.
+  async function exportLibrary() {
+    if (libProgress) return
+    const SIZE = 2048
+    const slug = (v: string | null | undefined) => (v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    const baseName = (a: Asset | null) => (a ? (a.storage_path.split("/").pop() || "").replace(/\.[^.]+$/, "") : "")
+
+    type Combo = { body: Asset; hair: Asset | null; outfit: Asset | null; expression: Asset | null }
+    const combos: Combo[] = []
+    for (const b of grouped.body) {
+      const bodyHairs = grouped.hair.filter((h) => h.age === b.age && h.gender === b.gender && h.skin_tone === b.skin_tone)
+      const bodyOutfits = grouped.outfit.filter((o) => o.parent_body_id === b.id)
+      const hairOpts: (Asset | null)[] = bodyHairs.length ? bodyHairs : [null]
+      const outfitOpts: (Asset | null)[] = [null, ...bodyOutfits]
+      const exprOpts: (Asset | null)[] = [null, ...grouped.expression]
+      for (const hair of hairOpts)
+        for (const outfit of outfitOpts)
+          for (const expression of exprOpts)
+            combos.push({ body: b, hair, outfit, expression })
+    }
+    if (!combos.length) { toast.error("No assets to export."); return }
+    if (!window.confirm(`Generate the full library — ${combos.length} images at ${SIZE}px.\n\nThis can take a few minutes and produce a large ZIP (hundreds of MB). Keep this tab focused and don't close it while it runs.`)) return
+
+    libCancel.current = false
+    setLibProgress({ done: 0, total: combos.length, phase: "render" })
+
+    const blobToImg = (blob: Blob) => new Promise<HTMLImageElement>((resolve, reject) => {
+      const url = URL.createObjectURL(blob)
+      const img = new Image()
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("decode failed")) }
+      img.src = url
+    })
+    const loadDataUrl = (u: string) => new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error("svg decode")); img.src = u
+    })
+    const fetchBlob = async (url: string) => { const r = await fetch(url, { cache: "force-cache" }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob() }
+    // Cache compressed blobs (small); decode to bitmaps on demand and release after each body/hair.
+    const blobCache = new Map<string, Blob>()
+    const getBlob = async (asset: Asset) => {
+      let b = blobCache.get(asset.id)
+      if (b) return b
+      try { b = await fetchBlob(thumbnailUrl(asset)) } catch { b = await fetchBlob(r2ProxyUrl(asset.thumbnail_path ?? asset.storage_path)) }
+      blobCache.set(asset.id, b); return b
+    }
+    const decode = async (asset: Asset | null) => { if (!asset) return null; try { return await blobToImg(await getBlob(asset)) } catch { return null } }
+    const svgTextCache = new Map<string, string>()
+    const getSvg = async (asset: Asset) => {
+      let t = svgTextCache.get(asset.id)
+      if (t) return t
+      try { t = await fetchSvgText(publicUrl(asset.storage_path, asset.storage_provider)) } catch { t = await fetchSvgText(r2ProxyUrl(asset.storage_path)) }
+      svgTextCache.set(asset.id, t); return t
+    }
+
+    const canvas = document.createElement("canvas")
+    canvas.width = canvas.height = SIZE
+    const ctx = canvas.getContext("2d")!
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = "high"
+    const scaleFactor = SIZE / CANVAS
+    const zOf = (cat: LayerOrder["category"]) => layerOrder.find((l) => l.category === cat)?.z_index ?? 0
+    const blendOf = (cat: LayerOrder["category"]) => layerOrder.find((l) => l.category === cat)?.blend_mode ?? "normal"
+    const zip = new JSZip()
+    let done = 0
+
+    try {
+      for (const b of grouped.body) {
+        if (libCancel.current) { setLibProgress(null); return }
+        const bodyImg = await decode(b)
+        const bodyOutfits = grouped.outfit.filter((o) => o.parent_body_id === b.id)
+        const outfitImgs = new Map<string, HTMLImageElement | null>()
+        for (const o of bodyOutfits) outfitImgs.set(o.id, await decode(o))
+        const bodyHairs = grouped.hair.filter((h) => h.age === b.age && h.gender === b.gender && h.skin_tone === b.skin_tone)
+        const hairOpts: (Asset | null)[] = bodyHairs.length ? bodyHairs : [null]
+
+        for (const hair of hairOpts) {
+          if (libCancel.current) { setLibProgress(null); return }
+          const hairImg = await decode(hair)
+          for (const outfit of [null, ...bodyOutfits] as (Asset | null)[]) {
+            for (const expression of [null, ...grouped.expression] as (Asset | null)[]) {
+              ctx.clearRect(0, 0, SIZE, SIZE)
+              const base = outfit ?? b
+              const baseImg = outfit ? outfitImgs.get(outfit.id) ?? null : bodyImg
+              const layers = [
+                { asset: base, img: baseImg, z: zOf("body"), blend: blendOf("body"), kind: "base" as const },
+                { asset: hair, img: hairImg, z: zOf("hair"), blend: blendOf("hair"), kind: "raster" as const },
+                { asset: expression, img: null, z: zOf("expression"), blend: blendOf("expression"), kind: "svg" as const },
+              ].sort((a, b) => a.z - b.z)
+              for (const l of layers) {
+                if (!l.asset) continue
+                try {
+                  ctx.globalCompositeOperation = (l.blend && l.blend !== "normal" ? l.blend : "source-over") as GlobalCompositeOperation
+                  if (l.kind === "base") {
+                    if (!l.img) continue
+                    const s = Math.min(SIZE / l.img.naturalWidth, SIZE / l.img.naturalHeight)
+                    const w = l.img.naturalWidth * s, h = l.img.naturalHeight * s
+                    ctx.drawImage(l.img, (SIZE - w) / 2, (SIZE - h) / 2, w, h)
+                  } else if (l.kind === "svg") {
+                    let text = await getSvg(l.asset)
+                    const override = hair ? headExprColors.find((k) => k.head_id === hair.id && k.expression_id === l.asset!.id)?.colors : null
+                    if (override && Object.keys(override).length > 0) text = applyColors(text, override)
+                    const vb = text.match(/viewBox="([^"]+)"/)
+                    let ratio = 1
+                    if (vb) { const p = vb[1].split(/[\s,]+/).map(parseFloat); if (p.length === 4 && p[2] > 0 && p[3] > 0) ratio = p[2] / p[3] }
+                    const svgW = ratio >= 1 ? SIZE : Math.round(SIZE * ratio)
+                    const svgH = ratio >= 1 ? Math.round(SIZE / ratio) : SIZE
+                    const svgImg = await loadDataUrl(svgToDataUrl(setSvgDimensions(text, svgW, svgH)))
+                    const t = resolveExpressionTransform(l.asset, hair?.id ?? null, b.id, defaults, headExprDefaults)
+                    const w = SIZE * t.scale
+                    const h = w / (svgImg.naturalWidth / svgImg.naturalHeight || 1)
+                    ctx.drawImage(svgImg, (SIZE - w) / 2 + t.offset_x * scaleFactor, (SIZE - h) / 2 + t.offset_y * scaleFactor, w, h)
+                  } else {
+                    if (!l.img) continue
+                    const t = resolveTransform(l.asset, b.id, defaults)
+                    const w = l.img.naturalWidth * t.scale * scaleFactor
+                    const h = l.img.naturalHeight * t.scale * scaleFactor
+                    ctx.drawImage(l.img, (SIZE - w) / 2 + t.offset_x * scaleFactor, (SIZE - h) / 2 + t.offset_y * scaleFactor, w, h)
+                  }
+                } catch (e) { console.warn("lib layer skipped", l.asset?.category, e) }
+              }
+              const folder = [b.age, b.gender, b.skin_tone].map(slug).join("-")
+              const fname = [hair ? baseName(hair) : "no-hair", outfit ? baseName(outfit) : "default-outfit", expression ? baseName(expression) : "no-expression"].map(slug).join("__")
+              const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"))
+              if (blob) zip.file(`${folder}/${fname}.png`, blob)
+              done++
+              setLibProgress({ done, total: combos.length, phase: "render" })
+              if (done % 4 === 0) await new Promise((r) => setTimeout(r, 0))
+            }
+          }
+        }
+      }
+      if (libCancel.current) { setLibProgress(null); return }
+      setLibProgress({ done: combos.length, total: combos.length, phase: "zip" })
+      const content = await zip.generateAsync({ type: "blob", compression: "STORE" })
+      const url = URL.createObjectURL(content)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "life360-character-library.zip"
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+      toast.success(`Exported ${combos.length} characters`)
+    } catch (e) {
+      console.error("Library export failed", e)
+      toast.error("Library export failed")
+    } finally {
+      setLibProgress(null)
+    }
+  }
+
   const DEFAULT_OUTFIT_ID = "__default_outfit__"
   const outfitTiles: Asset[] = body
     ? [{ ...body, id: DEFAULT_OUTFIT_ID, category: "outfit" } as Asset, ...availableOutfits]
@@ -561,6 +714,15 @@ export default function ClientPage() {
                   <Pencil className="h-4 w-4" /> Edit current
                 </button>
               )}
+              {isAdmin && (
+                <button
+                  onClick={exportLibrary}
+                  disabled={!!libProgress}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-white/[0.03] px-5 py-3.5 text-sm font-medium transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-white/[0.03]"
+                >
+                  {libProgress ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderArchive className="h-4 w-4" />} Download Library
+                </button>
+              )}
             </div>
           </aside>
 
@@ -673,6 +835,36 @@ export default function ClientPage() {
           </aside>
         </main>
       </div>
+
+      {libProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-secondary p-6 text-center shadow-xl">
+            <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-primary" />
+            <h3 className="text-base font-semibold">
+              {libProgress.phase === "zip" ? "Packaging ZIP…" : "Generating library…"}
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {libProgress.phase === "zip"
+                ? "Compressing images — the download will start shortly."
+                : `${libProgress.done} / ${libProgress.total} images`}
+            </p>
+            <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-150"
+                style={{ width: `${Math.round((libProgress.done / Math.max(libProgress.total, 1)) * 100)}%` }}
+              />
+            </div>
+            {libProgress.phase !== "zip" && (
+              <button
+                onClick={() => { libCancel.current = true }}
+                className="mt-4 rounded-full px-4 py-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
