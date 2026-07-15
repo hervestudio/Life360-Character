@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, HardDrive, Image as ImageIcon, Layers, LogOut, Move, Pencil, Plus, Power, RotateCcw, Trash2, Upload as UploadIcon, X } from "lucide-react"
+import JSZip from "jszip"
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Download, HardDrive, Image as ImageIcon, Layers, LogOut, Move, Pencil, Plus, Power, RotateCcw, Trash2, Upload as UploadIcon, X } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,6 +38,7 @@ import {
   fetchLayerOrder,
   isCurrentUserAdmin,
   publicUrl,
+  r2ProxyUrl,
   resolveTransform,
   saveLayerOrder,
   setAssetActive,
@@ -668,6 +670,7 @@ export default function AdminPage() {
   const [ageFilter, setAgeFilter] = useState<AgeGroup | "all">("all")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [downloadingParts, setDownloadingParts] = useState<{ done: number; total: number } | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [editAsset, setEditAsset] = useState<Asset | null>(null)
   const [loading, setLoading] = useState(true)
@@ -771,6 +774,54 @@ export default function AdminPage() {
       toast.error(err.message ?? "Bulk delete failed.")
     } finally {
       setBulkDeleting(false)
+    }
+  }
+
+  // Download the ORIGINAL source files (full resolution) of the selected assets as a ZIP,
+  // organised into folders by category. No compositing — just the raw uploaded files.
+  async function downloadSelectedParts() {
+    if (downloadingParts) return
+    const targets = assets.filter((a) => selectedIds.has(a.id))
+    if (!targets.length) return
+    setDownloadingParts({ done: 0, total: targets.length })
+    const fetchBlob = async (url: string) => {
+      const r = await fetch(url, { cache: "force-cache" })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.blob()
+    }
+    const catFolder = (c: AssetCategory) => (c === "hair" ? "head" : c)
+    try {
+      const zip = new JSZip()
+      let done = 0
+      for (const a of targets) {
+        try {
+          let blob: Blob
+          try {
+            blob = await fetchBlob(publicUrl(a.storage_path, a.storage_provider))
+          } catch {
+            blob = await fetchBlob(r2ProxyUrl(a.storage_path))
+          }
+          const filename = a.storage_path.split("/").pop() || `${a.id}`
+          zip.file(`${catFolder(a.category)}/${filename}`, blob)
+        } catch (e) {
+          console.warn("part download failed", a.storage_path, e)
+        }
+        done++
+        setDownloadingParts({ done, total: targets.length })
+      }
+      const content = await zip.generateAsync({ type: "blob", compression: "STORE" })
+      const url = URL.createObjectURL(content)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `life360-parts-${targets.length}.zip`
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+      toast.success(`Downloaded ${targets.length} part${targets.length > 1 ? "s" : ""}.`)
+    } catch (e: any) {
+      console.error("parts download failed", e)
+      toast.error(e?.message ?? "Download failed.")
+    } finally {
+      setDownloadingParts(null)
     }
   }
 
@@ -1006,6 +1057,14 @@ export default function AdminPage() {
                   className="border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:border-foreground hover:text-foreground"
                 >
                   Clear
+                </button>
+                <button
+                  onClick={downloadSelectedParts}
+                  disabled={!!downloadingParts}
+                  className="inline-flex items-center gap-1 border border-foreground bg-foreground px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-background disabled:opacity-50"
+                  title="Download original files of the selected assets as a ZIP"
+                >
+                  <Download className="h-3 w-3" /> {downloadingParts ? `${downloadingParts.done}/${downloadingParts.total}` : `Download ${selectedIds.size}`}
                 </button>
                 <button
                   onClick={bulkDelete}
